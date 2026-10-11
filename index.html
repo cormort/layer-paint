@@ -164,6 +164,7 @@ const wrap = $('wrap');
 let layers = [], cur = null, eraser = false, n = 0, undos = [], redos = [];
 let tf = null; // 變形中的狀態（覆蓋層一開始就會讀到，所以放最前面）
 let picking = false; // 滴管等待點選中
+let eCur = null; // 橡皮擦範圍圈：[clientX, clientY, 畫布半徑]
 
 // 暫存筆劃層：筆刷畫在這裡，放開時才以「濃度」合成到圖層，避免重疊處變深
 const tmp = Object.assign(document.createElement('canvas'), { width: W, height: H });
@@ -230,6 +231,12 @@ function drawGuide() {
     c.beginPath(); c.moveTo(-20000, guide.hy); c.lineTo(20000, guide.hy); c.stroke(); c.setLineDash([]);
     c.setTransform(d, 0, 0, d, 0, 0);
     gHandles().forEach(p => { c.beginPath(); c.arc(...toStage(p.x, p.y), 9, 0, 6.283); c.fillStyle = { hy: '#fc0', v1: '#e33', v2: '#2a2', v3: '#36f' }[p.id]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke(); });
+  }
+  if (eraser && eCur && !tf && !picking) { // 橡皮擦範圍圈：深淺兩圈，在白紙和深色筆跡上都看得到
+    const r = stage.getBoundingClientRect(), rad = Math.max(2, eCur[2] * v.s);
+    c.setTransform(d, 0, 0, d, 0, 0); c.lineWidth = 1;
+    c.beginPath(); c.arc(eCur[0] - r.left, eCur[1] - r.top, rad, 0, 6.283); c.strokeStyle = 'rgba(0,0,0,.65)'; c.stroke();
+    c.beginPath(); c.arc(eCur[0] - r.left, eCur[1] - r.top, rad + 1, 0, 6.283); c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke();
   }
   if (tf) { // 變形中的外框
     const { m, src } = tf, hw = src.width / 2, hh = src.height / 2, cr = Math.cos(m.r), sr = Math.sin(m.r);
@@ -408,7 +415,15 @@ stage.onpointerdown = e => {
   } else if (e.button === 1 || space) { pan = [e.clientX, e.clientY]; return; }
   startStroke(e);
 };
+// 滑鼠、Pencil 懸停或正在擦的時候顯示範圍；手指只在擦的過程中顯示
+const showECur = e => {
+  const pressed = e.pointerType === 'pen' && e.pressure > 0;
+  eCur = [e.clientX, e.clientY, (pressed ? width(e) * (1 + 3 * (B.tilt ? tiltOf(e) : 0)) : +$('size').value) / 2];
+  drawGuide();
+};
+stage.onpointerleave = () => { if (eCur) { eCur = null; drawGuide(); } };
 stage.onpointermove = e => {
+  if (eraser && (e.pointerType !== 'touch' || (last && e.pointerId === sid))) showECur(e);
   if (tf) return tfMove(e);
   if (gdrag) {
     if (e.pointerId === gdrag.pid) {
@@ -434,6 +449,7 @@ stage.onpointermove = e => {
   strokeMoved(e);
 };
 stage.onpointerup = stage.onpointercancel = e => {
+  if (e.pointerType === 'touch' && eCur) { eCur = null; drawGuide(); }
   if (tf) { tfPts.delete(e.pointerId); return; }
   const wasTouch = touches.delete(e.pointerId); pan = null;
   if (wasTouch && !touches.size && tap) {
@@ -479,8 +495,9 @@ function toolUi() {
   const busy = tf || picking;
   $('brush').classList.toggle('on', !busy && !eraser); $('eraser').classList.toggle('on', !busy && eraser);
   $('tfm').classList.toggle('on', !!tf); $('pick').classList.toggle('on', picking);
+  wrap.style.cursor = eraser && !busy ? 'none' : ''; // 用範圍圈取代十字游標
 }
-$('brush').onclick = () => { eraser = false; toolUi(); };
+$('brush').onclick = () => { eraser = false; eCur = null; toolUi(); drawGuide(); };
 $('eraser').onclick = () => { eraser = true; toolUi(); };
 $('add').onclick = () => addLayer();
 $('del').onclick = () => {
@@ -642,7 +659,7 @@ async function open3d() {
   $('m3lh').onclick = () => { lockH = !lockH; tog('m3lh', lockH, '鎖定水平', '鎖定水平'); setLocks(); };
   const geo = new T.BoxGeometry(1, 1, 1), mat = new T.MeshStandardMaterial();
   // --- 人偶 ---
-  const man = new T.Group(); scene.add(man);
+  const man = new T.Group(); man.visible = false; scene.add(man); // 預設不顯示，需要時按「人偶」
   const J = JOINTS.map(([name, par, x, y, z, r], i) => ({ name, par: JOINTS.findIndex(j => j[0] === par), r, i, kids: [], pos: new T.Vector3(x, y, z) }));
   if (manPose) J.forEach((j, i) => j.pos.fromArray(manPose[i]));
   const home = JOINTS.map(([, , x, y, z]) => [x, y, z]);
@@ -664,7 +681,7 @@ async function open3d() {
   });
   const setSize = () => man.scale.setScalar($('msize').value / 100);
   $('msize').oninput = setSize; setSize();
-  tog('m3man', true, '人偶', '');
+  tog('m3man', false, '人偶', '人偶');
   $('m3man').onclick = () => { man.visible = !man.visible; $('m3man').classList.toggle('on', man.visible); };
   $('m3reset').onclick = () => J.forEach((j, i) => j.pos.fromArray(home[i]));
   let grab = null;
@@ -689,7 +706,8 @@ async function open3d() {
     for (let t = -1500; t <= 1500; t += 250) { line3(V(-3000, y0, t), V(3000, y0, t), '#e33'); line3(V(t, y0, -3000), V(t, y0, 3000), '#2a2'); }
     for (let x = -750; x <= 750; x += 375) for (let z = -750; z <= 750; z += 375) line3(V(x, y0, z), V(x, y0 + 2400, z), '#36f');
 
-    const m = newLayer('人偶'); m.globalAlpha = .6; m.lineCap = 'round';
+    const m = man.visible && newLayer('人偶'); // 人偶隱藏時只存透視格線
+    if (m) { m.globalAlpha = .6; m.lineCap = 'round'; }
     const wp = j => toC(man.localToWorld(j.pos.clone())), items = [];
     J.forEach(j => {
       const b = wp(j); if (b.z > NEAR) return;
@@ -702,7 +720,7 @@ async function open3d() {
         m.strokeStyle = '#555'; m.lineWidth = w + 4; m.stroke(); m.strokeStyle = '#ddd'; m.lineWidth = w; m.stroke();
       } });
     });
-    items.sort((p, q) => p.z - q.z).forEach(i => i.f());
+    if (m) items.sort((p, q) => p.z - q.z).forEach(i => i.f());
 
     cur = prev; list();
     ls.forEach(e => { if (e.mesh) { scene.remove(e.mesh); e.mesh.dispose(); } }); ls = mkLs(); build();
