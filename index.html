@@ -55,6 +55,7 @@
     <button id="add">＋圖層</button><button id="del">刪除</button>
     <button id="up">▲</button><button id="down">▼</button>
     <button id="merge">向下合併</button><button id="d3">3D 柱體</button>
+    <button id="imp">匯入底圖</button><input id="impf" type="file" accept="image/*" hidden>
   </div>
   <label>圖層透明度 <input id="lalpha" type="range" min="0" max="100" value="100"></label>
   <div id="list" style="display:flex;flex-direction:column;gap:4px"></div>
@@ -72,7 +73,7 @@ tmp.style.pointerEvents = 'none';
 const tctx = tmp.getContext('2d');
 
 const stage = $('stage'), v = { x: 0, y: 0, s: 1 };
-const apply = () => { wrap.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.s})`; if (typeof drawGuide === 'function' && gcv) drawGuide(); };
+const apply = () => { wrap.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.s})`; drawGuide(); };
 function fit() {
   const w = stage.clientWidth, h = stage.clientHeight;
   v.s = Math.min((w - 40) / W, (h - 40) / H, 1);
@@ -106,10 +107,11 @@ function guideLines(ctx, lw) {
   ctx.globalAlpha = 1;
 }
 function drawGuide() {
-  const d = devicePixelRatio || 1, w = stage.clientWidth, h = stage.clientHeight;
-  gcv.width = w * d; gcv.height = h * d;
+  const d = devicePixelRatio || 1, w = stage.clientWidth, h = stage.clientHeight, c = gcv.getContext('2d');
+  const bw = Math.round(w * d), bh = Math.round(h * d);
+  if (gcv.width !== bw || gcv.height !== bh) { gcv.width = bw; gcv.height = bh; } // 只在尺寸變了才重新配置
+  else { c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, bw, bh); }
   if (!guide.mode) return;
-  const c = gcv.getContext('2d');
   c.save(); c.setTransform(d * v.s, 0, 0, d * v.s, d * v.x, d * v.y);
   c.beginPath(); c.rect(0, 0, W, H); c.clip();
   guideLines(c, 1.2 / v.s);
@@ -127,7 +129,10 @@ $('gbake').onclick = () => {
   guideLines(cur.ctx, 2); list();
 };
 let gdrag = null;
-addEventListener('resize', fit); fit();
+let sw = 0, sh = 0;
+// 視窗大小改變（iPad 旋轉、工具列伸縮）時只保持畫面中心，不重設使用者的縮放平移
+addEventListener('resize', () => { const w = stage.clientWidth, h = stage.clientHeight; v.x += (w - sw) / 2; v.y += (h - sh) / 2; sw = w; sh = h; apply(); });
+fit(); sw = stage.clientWidth; sh = stage.clientHeight;
 stage.addEventListener('wheel', e => {
   e.preventDefault();
   if (e.ctrlKey || e.metaKey) zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01)); // 觸控板捏合 / Ctrl+滾輪
@@ -165,7 +170,11 @@ function list() {
 }
 
 // --- 繪圖 ---
-let last = null, snap = null;
+let last = null, bb = null;
+// 筆劃開始時把圖層複製到 snapC（GPU 端，不做 getImageData）；結束時只裁下筆劃範圍存進復原堆疊
+const snapC = Object.assign(document.createElement('canvas'), { width: W, height: H }), snapX = snapC.getContext('2d');
+const crop = (src, x, y, w, h) => { const c = Object.assign(document.createElement('canvas'), { width: w, height: h }); c.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h); return c; };
+const evs = e => { const l = e.getCoalescedEvents?.(); return l?.length ? l : [e]; };
 const pos = e => { const r = wrap.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
 // pr 壓力影響、hard 邊緣硬度、flow 每次落點濃度、sp 間距(直徑比)、scat 顆粒散布、cap 整筆濃度上限
 const BRUSHES = {
@@ -200,7 +209,8 @@ function stamp(x, y, r) {
   c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
 }
 function draw(a, b, e) {
-  const w = width(e);
+  const w = width(e), m = w / 2 + 2;
+  bb = [Math.min(bb[0], a[0] - m, b[0] - m), Math.min(bb[1], a[1] - m, b[1] - m), Math.max(bb[2], a[0] + m, b[0] + m), Math.max(bb[3], a[1] + m, b[1] + m)];
   if (eraser) return seg(target(), a, b, w);
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]), step = Math.max(1, w * B.sp);
   let t = rest;
@@ -222,14 +232,14 @@ const mid = () => { const p = [...touches.values()]; return [(p[0][0] + p[1][0])
 
 function startStroke(e, p = pos(e)) {
   if (!cur.visible) return;
-  sid = e.pointerId; snap = cur.ctx.getImageData(0, 0, W, H);
+  sid = e.pointerId; snapX.clearRect(0, 0, W, H); snapX.drawImage(cur.c, 0, 0); bb = [Infinity, Infinity, -Infinity, -Infinity];
   last = p;
   rest = 0; tmp.style.opacity = eraser ? 0 : $('alpha').value / 100 * B.cap;
   draw(last, last, e); cur.ctx.globalCompositeOperation = 'source-over';
 }
 function cancelStroke() {
   if (!last) return;
-  cur.ctx.putImageData(snap, 0, 0); tctx.clearRect(0, 0, W, H); last = null;
+  cur.ctx.clearRect(0, 0, W, H); cur.ctx.drawImage(snapC, 0, 0); tctx.clearRect(0, 0, W, H); last = null;
 }
 stage.onpointerdown = e => {
   stage.setPointerCapture(e.pointerId);
@@ -266,7 +276,7 @@ stage.onpointermove = e => {
   }
   if (pan) { v.x += e.clientX - pan[0]; v.y += e.clientY - pan[1]; pan = [e.clientX, e.clientY]; apply(); return; }
   if (!last || e.pointerId !== sid) return;
-  for (const ev of (e.getCoalescedEvents?.() || [e])) {
+  for (const ev of evs(e)) {
     const p = pos(ev);
     draw(last, p, ev); last = p;
   }
@@ -285,7 +295,8 @@ function finishStroke() {
     cur.ctx.drawImage(tmp, 0, 0); cur.ctx.globalAlpha = 1;
     tctx.clearRect(0, 0, W, H);
   }
-  undos.push({ l: cur, d: snap }); if (undos.length > 30) undos.shift(); redos = [];
+  const x = Math.max(0, Math.floor(bb[0])), y = Math.max(0, Math.floor(bb[1])), w = Math.min(W, Math.ceil(bb[2])) - x, h = Math.min(H, Math.ceil(bb[3])) - y;
+  if (w > 0 && h > 0) { undos.push({ l: cur, c: crop(snapC, x, y, w, h), x, y }); if (undos.length > 30) undos.shift(); redos = []; }
   list();
 }
 addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { space = true; e.preventDefault(); } });
@@ -295,8 +306,9 @@ addEventListener('keyup', e => { if (e.code === 'Space') space = false; });
 function swap(from, to) {
   const s = from.pop(); if (!s) return;
   if (!layers.includes(s.l)) return swap(from, to);
-  to.push({ l: s.l, d: s.l.ctx.getImageData(0, 0, W, H) });
-  s.l.ctx.putImageData(s.d, 0, 0); list(); refresh3d?.(s.l);
+  const { x, y } = s, w = s.c.width, h = s.c.height;
+  to.push({ l: s.l, c: crop(s.l.c, x, y, w, h), x, y });
+  s.l.ctx.clearRect(x, y, w, h); s.l.ctx.drawImage(s.c, x, y); list(); refresh3d?.(s.l);
 }
 $('undo').onclick = () => swap(undos, redos);
 $('redo').onclick = () => swap(redos, undos);
@@ -349,12 +361,16 @@ const JOINTS = [
     [p + 'Hip', 'pelvis', 40 * k, -5, 0, 20], [p + 'Kn', p + 'Hip', 40 * k, -200, 0, 16],
     [p + 'An', p + 'Kn', 40 * k, -390, 0, 12], [p + 'To', p + 'An', 40 * k, -400, 70, 9]]),
 ];
+let opening = false;
 async function open3d() {
+  if (stop3d || opening) return; // 載入 three.js 期間重複點擊不要開第二個
+  opening = true;
   let T, OC;
   try { T = await import('three'); OC = (await import('three/addons/controls/OrbitControls.js')).OrbitControls; }
   catch { return alert('需要網路連線來載入 three.js'); }
+  finally { opening = false; }
   const box = $('m3c'), m3 = $('m3'); m3.style.display = 'flex';
-  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save'].forEach(i => $(i).disabled = on);
+  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp'].forEach(i => $(i).disabled = on);
   lock(true);
   const mkLs = () => layers.filter(l => l.visible && !l.guide).map(l => ({ l, px: null, mesh: null }));
   let ls = mkLs();
@@ -375,25 +391,26 @@ async function open3d() {
     ctl.minAzimuthAngle = lockH ? az : -Infinity; ctl.maxAzimuthAngle = lockH ? az : Infinity;
     ctl.minPolarAngle = lockV ? po : 0; ctl.maxPolarAngle = lockV ? po : Math.PI;
   };
-  const recenter = () => {
+  // full=false（自動回正）只把角度轉回去，保留縮放與平移；full=true（回正按鈕）全部歸位
+  const recenter = (full = true) => {
     cancelAnimationFrame(anim);
     const s0 = new T.Spherical().setFromVector3(cam.position.clone().sub(ctl.target)), t0 = ctl.target.clone(), zero = new T.Vector3();
-    const th1 = lockH ? s0.theta : camHome.theta, ph1 = lockV ? s0.phi : camHome.phi, t1 = performance.now();
+    const th1 = lockH ? s0.theta : camHome.theta, ph1 = lockV ? s0.phi : camHome.phi, t1 = performance.now(), tTo = full ? zero : t0, rTo = full ? camHome.radius : s0.radius;
     let dth = th1 - s0.theta; dth = ((dth + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
     const step = now => {
       const k = Math.min(1, (now - t1) / 360), e = 1 - (1 - k) ** 3;
-      ctl.target.lerpVectors(t0, zero, e);
-      cam.position.setFromSpherical(new T.Spherical(s0.radius + (camHome.radius - s0.radius) * e, s0.phi + (ph1 - s0.phi) * e, s0.theta + dth * e)).add(ctl.target);
+      ctl.target.lerpVectors(t0, tTo, e);
+      cam.position.setFromSpherical(new T.Spherical(s0.radius + (rTo - s0.radius) * e, s0.phi + (ph1 - s0.phi) * e, s0.theta + dth * e)).add(ctl.target);
       ctl.update(); if (k < 1) anim = requestAnimationFrame(step);
     };
     anim = requestAnimationFrame(step);
   };
   ctl.addEventListener('start', () => cancelAnimationFrame(anim));
-  ctl.addEventListener('end', () => { if (spring) recenter(); });
+  ctl.addEventListener('end', () => { if (spring) recenter(false); });
   const tog = (id, on, a, b) => { $(id).textContent = on ? a : b; $(id).classList.toggle('on', on); };
   tog('m3spring', false, '', '🔓 自由檢視'); tog('m3lv', false, '', '🔒 垂直鎖定'); tog('m3lh', false, '', '🔒 水平鎖定');
-  $('m3spring').onclick = () => { spring = !spring; tog('m3spring', spring, '🧲 自動回正: 開', '🔓 自由檢視'); if (spring) recenter(); };
-  $('m3home').onclick = recenter;
+  $('m3spring').onclick = () => { spring = !spring; tog('m3spring', spring, '🧲 自動回正: 開', '🔓 自由檢視'); if (spring) recenter(false); };
+  $('m3home').onclick = () => recenter();
   $('m3lv').onclick = () => { lockV = !lockV; tog('m3lv', lockV, '🔒 垂直鎖定中', '🔒 垂直鎖定'); setLocks(); };
   $('m3lh').onclick = () => { lockH = !lockH; tog('m3lh', lockH, '🔒 水平鎖定中', '🔒 水平鎖定'); setLocks(); };
   const geo = new T.BoxGeometry(1, 1, 1), mat = new T.MeshStandardMaterial();
@@ -420,6 +437,7 @@ async function open3d() {
   });
   const setSize = () => man.scale.setScalar($('msize').value / 100);
   $('msize').oninput = setSize; setSize();
+  tog('m3man', true, '人偶 顯示', '');
   $('m3man').onclick = () => { man.visible = !man.visible; $('m3man').textContent = man.visible ? '人偶 顯示' : '人偶 隱藏'; $('m3man').classList.toggle('on', man.visible); };
   $('m3reset').onclick = () => J.forEach((j, i) => j.pos.fromArray(home[i]));
   let grab = null;
@@ -514,12 +532,18 @@ async function open3d() {
     return ray.ray.intersectPlane(plane, hit) ? [hit.x + W / 2, H / 2 - hit.y] : null;
   };
   let mode = 0; // 0 畫圖 1 旋轉 2 擺姿勢
+  tog('m3mode', true, '✏️ 畫圖中', '');
   $('m3mode').onclick = () => {
     mode = (mode + 1) % 3;
     $('m3mode').textContent = ['✏️ 畫圖中', '🔄 旋轉中', '🕴 擺姿勢中'][mode]; $('m3mode').classList.toggle('on', mode !== 1);
   };
   const dragPlane = new T.Plane(), P = new T.Vector3();
+  const tp = new Set(); // 3D 視窗內按著的手指
   const down = e => {
+    if (e.pointerType === 'touch') {
+      tp.add(e.pointerId);
+      if (tp.size > 1) { if (last) { cancelStroke(); refresh3d(cur); } return; } // 第二指是手勢，不另起一筆
+    }
     if (mode === 2) {
       if (!man.visible) return;
       aim(e);
@@ -533,6 +557,7 @@ async function open3d() {
     e.stopPropagation(); box.setPointerCapture(e.pointerId);
     startStroke(e, p); refresh3d(cur);
   };
+  let rt = 0;
   const move = e => {
     if (grab) {
       if (e.pointerId !== grab.pid) return;
@@ -547,10 +572,13 @@ async function open3d() {
     }
     if (!last || e.pointerId !== sid) return;
     e.stopPropagation();
-    for (const ev of (e.getCoalescedEvents?.() || [e])) { const p = pick(ev); if (p) { draw(last, p, ev); last = p; } }
-    cur.ctx.globalCompositeOperation = 'source-over'; refresh3d(cur);
+    for (const ev of evs(e)) { const p = pick(ev); if (p) { draw(last, p, ev); last = p; } }
+    cur.ctx.globalCompositeOperation = 'source-over';
+    // ponytail: 節流整層重建（約 10fps）；要更即時再改成只重建筆劃範圍的方塊
+    if (performance.now() - rt > 100) { rt = performance.now(); refresh3d(cur); }
   };
   const up = e => {
+    tp.delete(e.pointerId);
     if (grab && e.pointerId === grab.pid) { grab.mesh.material = jmat; grab = null; return; }
     if (!last || e.pointerId !== sid) return; e.stopPropagation(); finishStroke(); refresh3d(cur);
   };
@@ -567,13 +595,27 @@ async function open3d() {
     manPose = J.map(j => j.pos.toArray());
     cancelAnimationFrame(raf); cancelAnimationFrame(anim); removeEventListener('resize', resize);
     ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'].forEach((t, i) => box.removeEventListener(t, [down, move, up, up][i], true));
-    ctl.dispose(); renderer.dispose(); renderer.domElement.remove(); m3.style.display = 'none';
+    scene.traverse(o => o.geometry?.dispose()); ls.forEach(e => e.mesh?.dispose()); [geo, mat, jmat, hot].forEach(x => x.dispose());
+    ctl.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); m3.style.display = 'none';
     lock(false); stop3d = refresh3d = null; list();
   };
   resize(); build(); loop();
 }
 $('d3').onclick = open3d;
 $('m3x').onclick = () => stop3d?.();
+
+// 匯入圖片當底圖：放在最底層之上、等比縮放置中、預設半透明；不改變目前選取的圖層
+$('imp').onclick = () => $('impf').click();
+$('impf').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const img = await createImageBitmap(f).catch(() => null);
+  if (!img) return alert('無法讀取這個圖片');
+  const prev = cur; cur = layers[0]; addLayer();
+  const k = Math.min(W / img.width, H / img.height), w = img.width * k, h = img.height * k;
+  cur.ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h); img.close();
+  cur.name = '底圖'; cur.c.style.opacity = .5;
+  cur = prev; list();
+};
 
 $('save').onclick = () => {
   const o = Object.assign(document.createElement('canvas'), { width: W, height: H }), x = o.getContext('2d');
