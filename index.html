@@ -39,8 +39,14 @@
 <div id="stage"><div id="wrap"></div></div>
 <aside>
   <div class="row">
-    <button id="brush" class="on">筆刷</button><button id="eraser">橡皮擦</button>
+    <button id="brush" class="on">筆刷</button><button id="eraser">橡皮擦</button><button id="tfm">變形</button><button id="pick">滴管</button>
     <button id="undo">↶</button><button id="redo">↷</button><button id="fit">適合畫面</button>
+  </div>
+  <div id="tfbar" style="display:none;flex-direction:column;gap:6px;padding:8px;border-radius:6px;background:#2a2a40">
+    <label>縮放 <input id="tfs" type="range" min="5" max="400" value="100"></label>
+    <label>旋轉 <input id="tfr" type="range" min="-180" max="180" value="0"></label>
+    <div class="row"><button id="tfflip">水平翻轉</button><button id="tfreset">重置</button><button id="tfok" class="on">完成</button></div>
+    <span style="font-size:12px;opacity:.6">拖曳移動；兩指捏合縮放＋旋轉</span>
   </div>
   <select id="bsel" style="padding:6px;border-radius:6px;background:#3a3a40;color:#eee;border:0"></select>
   <label>顏色 <input id="color" type="color" value="#222222"></label>
@@ -66,17 +72,24 @@ const W = 1200, H = 800;
 const $ = id => document.getElementById(id);
 const wrap = $('wrap');
 let layers = [], cur = null, eraser = false, n = 0, undos = [], redos = [];
+let tf = null; // 變形中的狀態（覆蓋層一開始就會讀到，所以放最前面）
 
 // 暫存筆劃層：筆刷畫在這裡，放開時才以「濃度」合成到圖層，避免重疊處變深
 const tmp = Object.assign(document.createElement('canvas'), { width: W, height: H });
 tmp.style.pointerEvents = 'none';
 const tctx = tmp.getContext('2d');
 
-const stage = $('stage'), v = { x: 0, y: 0, s: 1 };
-const apply = () => { wrap.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.s})`; drawGuide(); };
+const stage = $('stage'), v = { x: 0, y: 0, s: 1, r: 0 };
+const apply = () => { wrap.style.transform = `translate(${v.x}px,${v.y}px) rotate(${v.r}rad) scale(${v.s})`; drawGuide(); };
+// 畫布座標 ↔ stage 座標（含旋轉），不能再用 getBoundingClientRect 推算
+const toStage = (x, y) => { const c = Math.cos(v.r), s = Math.sin(v.r); return [v.x + (x * c - y * s) * v.s, v.y + (x * s + y * c) * v.s]; };
+const toCanvas = (cx, cy) => {
+  const r = stage.getBoundingClientRect(), x = cx - r.left - v.x, y = cy - r.top - v.y, c = Math.cos(v.r), s = Math.sin(v.r);
+  return [(x * c + y * s) / v.s, (-x * s + y * c) / v.s];
+};
 function fit() {
   const w = stage.clientWidth, h = stage.clientHeight;
-  v.s = Math.min((w - 40) / W, (h - 40) / H, 1);
+  v.s = Math.min((w - 40) / W, (h - 40) / H, 1); v.r = 0;
   v.x = (w - W * v.s) / 2; v.y = (h - H * v.s) / 2; apply();
 }
 // 以螢幕點 (cx,cy) 為中心縮放
@@ -84,6 +97,11 @@ function zoomAt(cx, cy, k) {
   const r = stage.getBoundingClientRect(), x = cx - r.left, y = cy - r.top;
   const s = Math.min(16, Math.max(0.02, v.s * k)); k = s / v.s;
   v.x = x - (x - v.x) * k; v.y = y - (y - v.y) * k; v.s = s; apply();
+}
+// 以螢幕點 (cx,cy) 為中心旋轉畫布（Procreate 式兩指旋轉）
+function rotateAt(cx, cy, da) {
+  const r = stage.getBoundingClientRect(), x = cx - r.left, y = cy - r.top, c = Math.cos(da), s = Math.sin(da), dx = v.x - x, dy = v.y - y;
+  v.x = x + dx * c - dy * s; v.y = y + dx * s + dy * c; v.r += da; apply();
 }
 // --- 透視輔助線：地平線與消失點可拖曳（座標用畫布像素），畫在 stage 上方的獨立覆蓋層 ---
 const guide = { mode: 0, hy: 400, v1: 250, v2: 1000, v3x: 600, v3y: 2600 };
@@ -111,15 +129,23 @@ function drawGuide() {
   const bw = Math.round(w * d), bh = Math.round(h * d);
   if (gcv.width !== bw || gcv.height !== bh) { gcv.width = bw; gcv.height = bh; } // 只在尺寸變了才重新配置
   else { c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, bw, bh); }
-  if (!guide.mode) return;
-  c.save(); c.setTransform(d * v.s, 0, 0, d * v.s, d * v.x, d * v.y);
-  c.beginPath(); c.rect(0, 0, W, H); c.clip();
-  guideLines(c, 1.2 / v.s);
-  c.restore();
-  c.setTransform(d, 0, 0, d, 0, 0);
-  c.strokeStyle = '#fc0'; c.setLineDash([8, 6]); c.lineWidth = 1.5;
-  const hy = guide.hy * v.s + v.y; c.beginPath(); c.moveTo(0, hy); c.lineTo(w, hy); c.stroke(); c.setLineDash([]);
-  gHandles().forEach(p => { c.beginPath(); c.arc(p.x * v.s + v.x, p.y * v.s + v.y, 9, 0, 6.283); c.fillStyle = { hy: '#fc0', v1: '#e33', v2: '#2a2', v3: '#36f' }[p.id]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke(); });
+  const cs = Math.cos(v.r) * v.s * d, sn = Math.sin(v.r) * v.s * d, inCanvas = () => c.setTransform(cs, sn, -sn, cs, d * v.x, d * v.y);
+  if (guide.mode) {
+    c.save(); inCanvas();
+    c.beginPath(); c.rect(0, 0, W, H); c.clip();
+    guideLines(c, 1.2 / v.s);
+    c.restore();
+    inCanvas(); c.strokeStyle = '#fc0'; c.setLineDash([8 / v.s, 6 / v.s]); c.lineWidth = 1.5 / v.s;
+    c.beginPath(); c.moveTo(-20000, guide.hy); c.lineTo(20000, guide.hy); c.stroke(); c.setLineDash([]);
+    c.setTransform(d, 0, 0, d, 0, 0);
+    gHandles().forEach(p => { c.beginPath(); c.arc(...toStage(p.x, p.y), 9, 0, 6.283); c.fillStyle = { hy: '#fc0', v1: '#e33', v2: '#2a2', v3: '#36f' }[p.id]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke(); });
+  }
+  if (tf) { // 變形中的外框
+    const { m, src } = tf, hw = src.width / 2, hh = src.height / 2, cr = Math.cos(m.r), sr = Math.sin(m.r);
+    const pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([a, b]) => toStage(W / 2 + m.x + (a * m.s * m.fx * cr - b * m.s * sr), H / 2 + m.y + (a * m.s * m.fx * sr + b * m.s * cr)));
+    c.setTransform(d, 0, 0, d, 0, 0); c.strokeStyle = '#4a7cff'; c.lineWidth = 2; c.setLineDash([6, 4]);
+    c.beginPath(); pts.forEach(p => c.lineTo(...p)); c.closePath(); c.stroke(); c.setLineDash([]);
+  }
 }
 $('gmode').onchange = e => { guide.mode = +e.target.value; drawGuide(); };
 $('gn').oninput = drawGuide;
@@ -175,88 +201,120 @@ let last = null, bb = null;
 const snapC = Object.assign(document.createElement('canvas'), { width: W, height: H }), snapX = snapC.getContext('2d');
 const crop = (src, x, y, w, h) => { const c = Object.assign(document.createElement('canvas'), { width: w, height: h }); c.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h); return c; };
 const evs = e => { const l = e.getCoalescedEvents?.(); return l?.length ? l : [e]; };
-const pos = e => { const r = wrap.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
-// pr 壓力影響、hard 邊緣硬度、flow 每次落點濃度、sp 間距(直徑比)、scat 顆粒散布、cap 整筆濃度上限
+const pos = e => toCanvas(e.clientX, e.clientY);
+// pr 壓力→粗細、po 壓力→濃度、hard 邊緣硬度、flow 每次落點濃度、sp 間距(直徑比)、cap 整筆濃度上限、grain 紙紋、tilt 側鋒
 const BRUSHES = {
-  '鋼筆':   { pr: .8, hard: 1,   flow: 1,   sp: .1,  scat: 0, cap: 1 },
-  '鉛筆':   { pr: .5, hard: 1,   flow: .5,  sp: .25, scat: 1, cap: 1, grain: 1 },
-  'Marker': { pr: 0,  hard: 1,   flow: 1,   sp: .1,  scat: 0, cap: .6 },
-  '水彩':   { pr: .6, hard: 0,   flow: .08, sp: .12, scat: 0, cap: .7 },
-  '噴槍':   { pr: .5, hard: 0,   flow: .15, sp: .1,  scat: 0, cap: 1 },
+  'HB 鉛筆': { pr: .25, po: .8, hard: 1, flow: .15, sp: .15, cap: 1, grain: 1, tilt: 1 },
+  '6B 鉛筆': { pr: .45, po: .6, hard: 1, flow: .35, sp: .15, cap: 1, grain: 1, tilt: 1 },
+  '鋼筆':   { pr: .8, hard: 1, flow: 1,   sp: .1,  cap: 1 },
+  'Marker': { pr: 0,  hard: 1, flow: 1,   sp: .1,  cap: .6 },
+  '水彩':   { pr: .6, hard: 0, flow: .08, sp: .12, cap: .7 },
+  '噴槍':   { pr: .5, hard: 0, flow: .15, sp: .1,  cap: 1 },
 };
-let B = BRUSHES['鋼筆'];
+let B = BRUSHES['HB 鉛筆'];
 $('bsel').append(...Object.keys(BRUSHES).map(k => new Option(k)));
 $('bsel').onchange = e => B = BRUSHES[e.target.value];
 const width = e => { const z = $('size').value; return e.pointerType === 'pen' ? z * (1 - B.pr + B.pr * e.pressure) : z; };
+// 筆身傾斜程度 0~1：只有傾斜超過 45° 才算側鋒
+const tiltOf = e => {
+  const t = e.altitudeAngle != null ? 1 - e.altitudeAngle / (Math.PI / 2) : Math.hypot(e.tiltX || 0, e.tiltY || 0) / 90;
+  return Math.min(1, Math.max(0, (t - .5) / .5));
+};
+
+// 紙紋：固定在畫布座標的雜訊圖樣，重複塗同一處時紙的凹洞仍留白，像真的鉛筆
+const grainC = (() => {
+  const c = Object.assign(document.createElement('canvas'), { width: 128, height: 128 }), x = c.getContext('2d'), d = x.createImageData(128, 128);
+  for (let i = 3; i < d.data.length; i += 4) d.data[i] = Math.max(0, Math.random() * 1.5 - .5) * 255;
+  x.putImageData(d, 0, 0); return c;
+})();
+let gCol = null, gPat = null;
+const grainPat = col => {
+  if (col !== gCol) {
+    const c = Object.assign(document.createElement('canvas'), { width: 128, height: 128 }), x = c.getContext('2d');
+    x.fillStyle = col; x.fillRect(0, 0, 128, 128); x.globalCompositeOperation = 'destination-in'; x.drawImage(grainC, 0, 0);
+    gPat = x.createPattern(c, 'repeat'); gCol = col;
+  }
+  return gPat;
+};
 
 let rest = 0;
-function stamp(x, y, r) {
-  const c = tctx, col = $('color').value;
-  c.fillStyle = col;
-  if (B.grain) { // 鉛筆：在範圍內撒小點
-    c.globalAlpha = B.flow;
-    for (let i = 0; i < r * 1.5 + 2; i++) {
-      const a = Math.random() * 6.283, d = Math.sqrt(Math.random()) * r;
-      c.fillRect(x + Math.cos(a) * d, y + Math.sin(a) * d, 1.2, 1.2);
-    }
-    return;
-  }
-  c.globalAlpha = B.flow;
-  if (B.hard < 1) {
-    const g = c.createRadialGradient(x, y, r * B.hard, x, y, r);
-    g.addColorStop(0, col); g.addColorStop(1, col + '00'); c.fillStyle = g;
-  }
+function stamp(c, x, y, r, a) {
+  const col = $('color').value;
+  c.globalAlpha = a;
+  if (B.grain) c.fillStyle = grainPat(col);
+  else if (B.hard < 1) { const g = c.createRadialGradient(x, y, r * B.hard, x, y, r); g.addColorStop(0, col); g.addColorStop(1, col + '00'); c.fillStyle = g; }
+  else c.fillStyle = col;
   c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
 }
+// 筆刷畫在暫存層；橡皮擦用同一支筆刷直接從圖層擦掉（鉛筆紙紋也能擦出顆粒感）
 function draw(a, b, e) {
-  const w = width(e), m = w / 2 + 2;
+  const pen = e.pointerType === 'pen', t = B.tilt && pen ? tiltOf(e) : 0;
+  const w = width(e) * (1 + 3 * t), m = w / 2 + 2;
+  const fl = B.flow * (pen && B.po ? 1 - B.po + B.po * e.pressure : 1) * (1 - .6 * t);
   bb = [Math.min(bb[0], a[0] - m, b[0] - m), Math.min(bb[1], a[1] - m, b[1] - m), Math.max(bb[2], a[0] + m, b[0] + m), Math.max(bb[3], a[1] + m, b[1] + m)];
-  if (eraser) return seg(target(), a, b, w);
+  const c = eraser ? cur.ctx : tctx;
+  if (eraser) c.globalCompositeOperation = 'destination-out';
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]), step = Math.max(1, w * B.sp);
-  let t = rest;
-  for (; t <= d; t += step) { const k = d ? t / d : 0; stamp(a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, w / 2); }
-  rest = t - d; tctx.globalAlpha = 1;
+  let k = rest;
+  for (; k <= d; k += step) { const f = d ? k / d : 0; stamp(c, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, w / 2, fl); }
+  rest = k - d; c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
 }
 
-function seg(ctx, a, b, w) {
-  ctx.lineWidth = w; ctx.lineCap = ctx.lineJoin = 'round';
-  ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+// QuickShape：筆停住 0.5 秒就把這一筆拉直成直線，之後移動可調整終點
+let st0 = null, snapped = false, qs = 0, qsAt = null, lastEv = null;
+function qsArm(e) {
+  clearTimeout(qs); qsAt = [e.clientX, e.clientY];
+  qs = setTimeout(() => { if (!last) return; snapped = true; redrawLine(); refresh3d?.(cur); }, 500);
 }
-function target() {
-  if (eraser) { cur.ctx.globalCompositeOperation = 'destination-out'; cur.ctx.strokeStyle = '#000'; return cur.ctx; }
-  tctx.strokeStyle = $('color').value; return tctx;
+function redrawLine() {
+  if (eraser) { cur.ctx.clearRect(0, 0, W, H); cur.ctx.drawImage(snapC, 0, 0); } else tctx.clearRect(0, 0, W, H);
+  rest = 0; draw(st0, last, lastEv);
 }
+function strokeTo(p, ev) {
+  const a = last; lastEv = ev; last = p;
+  if (snapped) redrawLine(); else draw(a, p, ev);
+}
+const strokeMoved = e => { if (!snapped && Math.hypot(e.clientX - qsAt[0], e.clientY - qsAt[1]) > 6) qsArm(e); };
+
 let sid = null, pen = false, pan = null, space = false;
 const touches = new Map();
-const mid = () => { const p = [...touches.values()]; return [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2, Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1])]; };
+const midOf = m => { const p = [...m.values()]; return [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2, Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]), Math.atan2(p[1][1] - p[0][1], p[1][0] - p[0][0])]; };
+const mid = () => midOf(touches);
+let tap = null; // 兩指輕點＝復原、三指輕點＝重做
 
 function startStroke(e, p = pos(e)) {
   if (!cur.visible) return;
   sid = e.pointerId; snapX.clearRect(0, 0, W, H); snapX.drawImage(cur.c, 0, 0); bb = [Infinity, Infinity, -Infinity, -Infinity];
-  last = p;
+  last = st0 = p; lastEv = e; snapped = false;
   rest = 0; tmp.style.opacity = eraser ? 0 : $('alpha').value / 100 * B.cap;
-  draw(last, last, e); cur.ctx.globalCompositeOperation = 'source-over';
+  draw(p, p, e); qsArm(e);
 }
 function cancelStroke() {
   if (!last) return;
+  clearTimeout(qs);
   cur.ctx.clearRect(0, 0, W, H); cur.ctx.drawImage(snapC, 0, 0); tctx.clearRect(0, 0, W, H); last = null;
 }
 stage.onpointerdown = e => {
   stage.setPointerCapture(e.pointerId);
+  if (tf) { tfPts.set(e.pointerId, [e.clientX, e.clientY]); return; }
+  if (picking && !touches.size) { pickColor(pos(e)); return; }
   if (guide.mode) { // 先檢查是否按在消失點／地平線把手上
     const r = stage.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, R = e.pointerType === 'touch' ? 30 : 16;
-    const h = gHandles().find(p => Math.hypot(p.x * v.s + v.x - px, p.y * v.s + v.y - py) < R);
+    const h = gHandles().find(p => { const [hx, hy] = toStage(p.x, p.y); return Math.hypot(hx - px, hy - py) < R; });
     if (h) { gdrag = { id: h.id, pid: e.pointerId }; return; }
   }
   if (e.pointerType === 'pen') pen = true;
   if (e.pointerType === 'touch') {
     touches.set(e.pointerId, [e.clientX, e.clientY]);
+    if (touches.size === 1 || !tap) tap = { t: performance.now(), n: 0, moved: false, start: new Map() };
+    tap.n = Math.max(tap.n, touches.size); tap.start.set(e.pointerId, [e.clientX, e.clientY]);
     if (touches.size >= 2) cancelStroke();
     if (touches.size >= 2 || pen) return; // 兩指一律是手勢；偵測到 Apple Pencil 後單指也只負責平移
   } else if (e.button === 1 || space) { pan = [e.clientX, e.clientY]; return; }
   startStroke(e);
 };
 stage.onpointermove = e => {
+  if (tf) return tfMove(e);
   if (gdrag) {
     if (e.pointerId === gdrag.pid) {
       const p = pos(e), id = gdrag.id;
@@ -265,31 +323,34 @@ stage.onpointermove = e => {
     }
     return;
   }
+  if (tap?.start.has(e.pointerId)) { const p0 = tap.start.get(e.pointerId); if (Math.hypot(e.clientX - p0[0], e.clientY - p0[1]) > 10) tap.moved = true; }
   if (touches.has(e.pointerId)) {
     const old = touches.size === 2 ? mid() : null, prev = touches.get(e.pointerId);
     touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (old) {
-      const n = mid(); zoomAt(old[0], old[1], n[2] / old[2]);
+      const n = mid(); zoomAt(old[0], old[1], n[2] / old[2]); rotateAt(old[0], old[1], n[3] - old[3]);
       v.x += n[0] - old[0]; v.y += n[1] - old[1]; apply();
     } else if (pen && touches.size === 1) { v.x += e.clientX - prev[0]; v.y += e.clientY - prev[1]; apply(); }
     if (touches.size > 1 || pen) return;
   }
   if (pan) { v.x += e.clientX - pan[0]; v.y += e.clientY - pan[1]; pan = [e.clientX, e.clientY]; apply(); return; }
   if (!last || e.pointerId !== sid) return;
-  for (const ev of evs(e)) {
-    const p = pos(ev);
-    draw(last, p, ev); last = p;
-  }
-  cur.ctx.globalCompositeOperation = 'source-over';
+  for (const ev of evs(e)) strokeTo(pos(ev), ev);
+  strokeMoved(e);
 };
 stage.onpointerup = stage.onpointercancel = e => {
-  touches.delete(e.pointerId); pan = null;
+  if (tf) { tfPts.delete(e.pointerId); return; }
+  const wasTouch = touches.delete(e.pointerId); pan = null;
+  if (wasTouch && !touches.size && tap) {
+    if (!tap.moved && performance.now() - tap.t < 350 && tap.n >= 2) $(tap.n === 2 ? 'undo' : 'redo').click();
+    tap = null;
+  }
   if (gdrag && e.pointerId === gdrag.pid) { gdrag = null; return; }
   if (!last || e.pointerId !== sid) return;
   finishStroke();
 };
 function finishStroke() {
-  last = null;
+  last = null; clearTimeout(qs); cur.img = null; // 畫過的底圖不再保留原始圖檔
   if (!eraser) {
     cur.ctx.globalAlpha = $('alpha').value / 100 * B.cap;
     cur.ctx.drawImage(tmp, 0, 0); cur.ctx.globalAlpha = 1;
@@ -308,7 +369,7 @@ function swap(from, to) {
   if (!layers.includes(s.l)) return swap(from, to);
   const { x, y } = s, w = s.c.width, h = s.c.height;
   to.push({ l: s.l, c: crop(s.l.c, x, y, w, h), x, y });
-  s.l.ctx.clearRect(x, y, w, h); s.l.ctx.drawImage(s.c, x, y); list(); refresh3d?.(s.l);
+  s.l.img = null; s.l.ctx.clearRect(x, y, w, h); s.l.ctx.drawImage(s.c, x, y); list(); refresh3d?.(s.l);
 }
 $('undo').onclick = () => swap(undos, redos);
 $('redo').onclick = () => swap(redos, undos);
@@ -334,9 +395,73 @@ $('merge').onclick = () => {
   const i = layers.indexOf(cur); if (i < 1) return;
   const b = layers[i - 1];
   if (cur.visible) { b.ctx.globalAlpha = cur.c.style.opacity || 1; b.ctx.drawImage(cur.c, 0, 0); b.ctx.globalAlpha = 1; }
-  cur.c.remove(); layers.splice(i, 1); cur = b;
+  cur.c.remove(); layers.splice(i, 1); cur = b; b.img = null;
   undos = undos.filter(u => u.l !== b); redos = redos.filter(u => u.l !== b); sync();
 };
+
+// --- 變形：移動/縮放/旋轉/翻轉目前圖層。底圖保留原始圖檔，重複變形不會越來越糊 ---
+const tfPts = new Map();
+const fitTf = img => ({ x: 0, y: 0, s: Math.min(W / img.width, H / img.height), r: 0, fx: 1 });
+function paintTf(ctx, src, m) {
+  ctx.clearRect(0, 0, W, H); ctx.save();
+  ctx.translate(W / 2 + m.x, H / 2 + m.y); ctx.rotate(m.r); ctx.scale(m.s * m.fx, m.s);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2); ctx.restore();
+}
+const tfUi = () => {
+  $('tfbar').style.display = tf ? 'flex' : 'none'; $('tfm').classList.toggle('on', !!tf);
+  if (!tf) return;
+  $('tfs').value = tf.m.s * 100; $('tfr').value = Math.round(((tf.m.r * 180 / Math.PI) % 360 + 540) % 360 - 180);
+};
+const tfRender = () => { paintTf(tf.L.ctx, tf.src, tf.m); drawGuide(); tfUi(); };
+function startTf() {
+  if (tf) return;
+  const L = cur, before = crop(L.c, 0, 0, W, H);
+  tf = { L, before, src: L.img || before, m: L.img ? { ...L.tf } : { x: 0, y: 0, s: 1, r: 0, fx: 1 } };
+  tf.m0 = L.img ? fitTf(L.img) : { ...tf.m };
+  tfPts.clear(); tfRender();
+}
+function endTf() {
+  if (!tf) return;
+  const { L, m, before } = tf;
+  if (L.img) L.tf = m;
+  undos.push({ l: L, c: before, x: 0, y: 0 }); if (undos.length > 30) undos.shift(); redos = [];
+  tf = null; tfUi(); drawGuide(); list();
+}
+function tfMove(e) {
+  if (!tfPts.has(e.pointerId)) return;
+  const old = new Map(tfPts); tfPts.set(e.pointerId, [e.clientX, e.clientY]);
+  const m = tf.m;
+  if (tfPts.size === 1) {
+    const a = toCanvas(...old.get(e.pointerId)), b = toCanvas(e.clientX, e.clientY);
+    m.x += b[0] - a[0]; m.y += b[1] - a[1];
+  } else if (tfPts.size === 2) {
+    const o = midOf(old), n = midOf(tfPts), a = toCanvas(o[0], o[1]), b = toCanvas(n[0], n[1]);
+    m.s = Math.max(.01, m.s * n[2] / o[2]); m.r += n[3] - o[3]; m.x += b[0] - a[0]; m.y += b[1] - a[1];
+  }
+  tfRender();
+}
+$('tfm').onclick = () => tf ? endTf() : startTf();
+$('tfok').onclick = endTf;
+$('tfs').oninput = e => { tf.m.s = e.target.value / 100; tfRender(); };
+$('tfr').oninput = e => { tf.m.r = e.target.value * Math.PI / 180; tfRender(); };
+$('tfflip').onclick = () => { tf.m.fx *= -1; tfRender(); };
+$('tfreset').onclick = () => { tf.m = { ...tf.m0 }; tfRender(); };
+// 按側邊欄其他按鈕或切換圖層前，先把變形套用完成
+document.querySelector('aside').addEventListener('click', e => { if (tf && !e.target.closest('#tfbar,#tfm')) endTf(); }, true);
+addEventListener('keydown', e => { if (tf && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') endTf(); }, true);
+
+// --- 滴管：下一次點畫布取樣可見圖層的合成顏色 ---
+let picking = false;
+$('pick').onclick = () => { picking = !picking; $('pick').classList.toggle('on', picking); };
+function pickColor([x, y]) {
+  picking = false; $('pick').classList.remove('on');
+  x = Math.floor(x); y = Math.floor(y); if (x < 0 || y < 0 || x >= W || y >= H) return;
+  const c = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
+  c.fillStyle = '#fff'; c.fillRect(0, 0, 1, 1);
+  layers.filter(l => l.visible).forEach(l => { c.globalAlpha = +(l.c.style.opacity || 1); c.drawImage(l.c, x, y, 1, 1, 0, 0, 1, 1); });
+  const d = c.getImageData(0, 0, 1, 1).data;
+  $('color').value = '#' + [d[0], d[1], d[2]].map(n => n.toString(16).padStart(2, '0')).join('');
+}
 
 // --- 3D 柱體：每個可見圖層取樣成一片方塊板，由下到上（後到前）依層距排開 ---
 let stop3d = null, refresh3d = null, manPose = null;
@@ -364,13 +489,14 @@ const JOINTS = [
 let opening = false;
 async function open3d() {
   if (stop3d || opening) return; // 載入 three.js 期間重複點擊不要開第二個
+  endTf();
   opening = true;
   let T, OC;
   try { T = await import('three'); OC = (await import('three/addons/controls/OrbitControls.js')).OrbitControls; }
   catch { return alert('需要網路連線來載入 three.js'); }
   finally { opening = false; }
   const box = $('m3c'), m3 = $('m3'); m3.style.display = 'flex';
-  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp'].forEach(i => $(i).disabled = on);
+  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp', 'tfm'].forEach(i => $(i).disabled = on);
   lock(true);
   const mkLs = () => layers.filter(l => l.visible && !l.guide).map(l => ({ l, px: null, mesh: null }));
   let ls = mkLs();
@@ -572,8 +698,8 @@ async function open3d() {
     }
     if (!last || e.pointerId !== sid) return;
     e.stopPropagation();
-    for (const ev of evs(e)) { const p = pick(ev); if (p) { draw(last, p, ev); last = p; } }
-    cur.ctx.globalCompositeOperation = 'source-over';
+    for (const ev of evs(e)) { const p = pick(ev); if (p) strokeTo(p, ev); }
+    strokeMoved(e);
     // ponytail: 節流整層重建（約 10fps）；要更即時再改成只重建筆劃範圍的方塊
     if (performance.now() - rt > 100) { rt = performance.now(); refresh3d(cur); }
   };
@@ -611,8 +737,7 @@ $('impf').onchange = async e => {
   const img = await createImageBitmap(f).catch(() => null);
   if (!img) return alert('無法讀取這個圖片');
   const prev = cur; cur = layers[0]; addLayer();
-  const k = Math.min(W / img.width, H / img.height), w = img.width * k, h = img.height * k;
-  cur.ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h); img.close();
+  cur.img = img; cur.tf = fitTf(img); paintTf(cur.ctx, img, cur.tf);
   cur.name = '底圖'; cur.c.style.opacity = .5;
   cur = prev; list();
 };
