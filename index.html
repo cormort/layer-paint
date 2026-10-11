@@ -52,6 +52,7 @@
   <label>顏色 <input id="color" type="color" value="#222222"></label>
   <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
   <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
+  <label><input id="qson" type="checkbox" checked> QuickShape（停筆拉直線）</label>
   <label>輔助線 <select id="gmode" style="flex:1;padding:6px;border-radius:6px;background:#3a3a40;color:#eee;border:0">
     <option value="0">關</option><option value="1">1 點透視</option><option value="2">2 點透視</option><option value="3">3 點透視</option></select></label>
   <label>線數 <input id="gn" type="range" min="4" max="48" value="16"></label>
@@ -264,6 +265,7 @@ function draw(a, b, e) {
 let st0 = null, snapped = false, qs = 0, qsAt = null, lastEv = null;
 function qsArm(e) {
   clearTimeout(qs); qsAt = [e.clientX, e.clientY];
+  if (!$('qson').checked) return;
   qs = setTimeout(() => { if (!last) return; snapped = true; redrawLine(); refresh3d?.(cur); }, 500);
 }
 function redrawLine() {
