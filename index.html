@@ -84,13 +84,15 @@
   .hint{font-size:12px;color:var(--muted)}
 
   #list{display:flex;flex-direction:column;gap:2px}
-  .layer{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+  .layer{display:flex;align-items:center;gap:6px;padding:6px 6px 6px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
   .layer:hover{background:var(--field)}
   .layer.sel{background:var(--field);border-color:var(--line);box-shadow:inset 3px 0 0 var(--blue)}
+  .layer.lock span{color:var(--muted)} /* 鎖定中的圖層名稱變淡，配合 🔒 */
   .layer canvas{width:36px;height:48px;flex:none;background:#fff;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
   .layer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .layer button{border:0;background:transparent;min-height:30px;padding:0 6px;opacity:.75}
+  .layer button{border:0;background:transparent;min-height:30px;padding:0 5px;opacity:.75}
   .layer button:hover{opacity:1}
+  .layer button:disabled{opacity:.25}
   #save{min-height:40px}
 
   #m3{display:none;position:fixed;inset:0;z-index:9;background:#1d1e21;flex-direction:column}
@@ -168,7 +170,7 @@
   <section class="grp">
     <h2>圖層</h2>
     <div class="row">
-      <button id="add">新增</button><button id="imp">匯入底圖</button><button id="del">刪除</button>
+      <button id="add">新增</button><button id="imp">匯入底圖</button><button id="clr">清除</button><button id="del">刪除</button>
     </div>
     <div class="row">
       <button id="up" class="icon" aria-label="上移">▲</button><button id="down" class="icon" aria-label="下移">▼</button><button id="merge">向下合併</button>
@@ -181,12 +183,21 @@
   <section class="grp">
     <button id="d3">3D 檢視</button>
     <button id="save">匯出 PNG</button>
+    <div class="row"><button id="psave" title="存成可再編輯的專案檔（保留圖層）">存專案</button><button id="popen" title="開啟先前存的 .lpaint 專案">開專案</button></div>
+    <input id="pfile" type="file" hidden>
   </section>
 </aside>
 <script>
-const W = 1200, H = 1600;
-// 圖層縮圖：跟著畫布比例走，否則直向畫布會被壓扁
-const TW = 36, TH = 48;
+// 畫布尺寸是可變的：專案檔帶著自己的尺寸，載入時會一起換掉
+let W = 1200, H = 1600;
+// 圖層縮圖：跟著畫布比例走，否則非 3:4 的畫布會被壓扁
+let TW = 36, TH = 48;
+const fitThumbSize = () => {
+  const M = 48;
+  if (W >= H) { TW = M; TH = Math.max(1, Math.round(M * H / W)); }
+  else { TH = M; TW = Math.max(1, Math.round(M * W / H)); }
+};
+fitThumbSize();
 const $ = id => document.getElementById(id);
 const wrap = $('wrap');
 let layers = [], cur = null, eraser = false, n = 0, undos = [], redos = [];
@@ -348,7 +359,7 @@ stage.addEventListener('wheel', e => {
 
 function addLayer(fill) {
   const c = Object.assign(document.createElement('canvas'), { width: W, height: H });
-  const L = { c, ctx: c.getContext('2d'), name: '圖層 ' + (++n), visible: true };
+  const L = { c, ctx: c.getContext('2d'), name: '圖層 ' + (++n), visible: true, locked: false };
   if (fill) { L.ctx.fillStyle = '#fff'; L.ctx.fillRect(0, 0, W, H); L.name = '背景'; }
   layers.splice(cur ? layers.indexOf(cur) + 1 : 0, 0, L);
   cur = L; sync();
@@ -369,16 +380,24 @@ function list(...dirty) {
   $('lalpha').value = (cur.c.style.opacity || 1) * 100;
   $('list').replaceChildren(...[...layers].reverse().map(l => {
     const row = document.createElement('div');
-    row.className = 'layer' + (l === cur ? ' sel' : '');
+    row.className = 'layer' + (l === cur ? ' sel' : '') + (l.locked ? ' lock' : '');
     let th = thumbs.get(l);
     if (!th) { th = Object.assign(document.createElement('canvas'), { width: TW, height: TH }); thumbs.set(l, th); d.add(l); }
     if (d.has(l)) { const tc = th.getContext('2d'); tc.clearRect(0, 0, TW, TH); tc.drawImage(l.c, 0, 0, TW, TH); }
+    th.style.width = TW + 'px'; th.style.height = TH + 'px';
     const eye = document.createElement('button'); eye.textContent = l.visible ? '顯示' : '隱藏'; eye.setAttribute('aria-pressed', l.visible);
-    eye.disabled = !!stop3d;
+    eye.title = l.visible ? '隱藏這一層' : '顯示這一層'; eye.disabled = !!stop3d;
     eye.onclick = e => { e.stopPropagation(); l.visible = !l.visible; l.c.style.display = l.visible ? '' : 'none'; list(); };
+    // 鎖定：保護圖層不被畫到、擦到、清空、變形、合併、刪除
+    const lk = document.createElement('button'); lk.textContent = l.locked ? '🔒' : '🔓';
+    lk.title = l.locked ? '解除鎖定' : '鎖定（保護）這一層'; lk.setAttribute('aria-pressed', !!l.locked);
+    lk.onclick = e => { e.stopPropagation(); l.locked = !l.locked; list(); };
+    const rm = document.createElement('button'); rm.textContent = '✕'; rm.title = '刪除這一層';
+    rm.disabled = layers.length < 2 || !!stop3d;
+    rm.onclick = e => { e.stopPropagation(); delLayer(l); };
     const nm = document.createElement('span'); nm.textContent = l.name; nm.title = '雙擊重新命名';
     nm.ondblclick = () => { const t = prompt('圖層名稱', l.name); if (t) { l.name = t; list(); } };
-    row.append(th, nm, eye);
+    row.append(th, nm, eye, lk, rm);
     row.onclick = () => { cur = l; list(); };
     return row;
   }));
@@ -421,7 +440,7 @@ const BRUSHES = {
   '6B 鉛筆': { pr: .45, po: .6, hard: 1, flow: .35, sp: .15, cap: 1, grain: 1, tilt: 1 },
   '鋼筆':   { pr: .8, hard: 1, flow: 1,   sp: .1,  cap: 1 },
   'Marker': { pr: 0,  hard: 1, flow: 1,   sp: .1,  cap: .6 },
-  '水彩':   { pr: .6, hard: 0, flow: .08, sp: .12, cap: .7 },
+  '水彩':   { pr: .6, flow: .1, sp: .1, cap: .72, wet: 1 },
   '噴槍':   { pr: .5, hard: 0, flow: .15, sp: .1,  cap: 1 },
 };
 let B = BRUSHES['HB 鉛筆'];
@@ -481,25 +500,55 @@ $('tipf').onchange = async e => {
   setTip(img, f.name);
 };
 
+// 水彩：顏料積在紙紋凹陷處。紋理固定在「畫布座標」（跟鉛筆紙紋同一個原理），所以筆印再怎麼
+// 重疊都不會被抹平——用「每顆筆印一張圖」的做法在密集筆劃下一定會糊成一片平的（實測過）。
+// 真正的水彩流體模擬做不到，但顆粒＋低濃度堆疊＋濕邊是讓人一眼認出水彩的主要線索。
+const WC_T = 128;
+const wcNoise = (() => {
+  const c = Object.assign(document.createElement('canvas'), { width: WC_T, height: WC_T }), x = c.getContext('2d');
+  for (let i = 0; i < 240; i++) {
+    const px = Math.random() * WC_T, py = Math.random() * WC_T, pr = 3 + Math.random() * 8, a = (.3 + Math.random() * .5).toFixed(2);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { // 畫九宮格讓圖樣可以無縫並排
+      const g = x.createRadialGradient(px + dx * WC_T, py + dy * WC_T, 0, px + dx * WC_T, py + dy * WC_T, pr);
+      g.addColorStop(0, 'rgba(0,0,0,' + a + ')'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.beginPath(); x.arc(px + dx * WC_T, py + dy * WC_T, pr, 0, 6.283); x.fill();
+    }
+  }
+  return c;
+})();
+let wcCol = null, wcPat = null;
+function wcGrain(col) {
+  if (col !== wcCol || !wcPat) {
+    const c = Object.assign(document.createElement('canvas'), { width: WC_T, height: WC_T }), x = c.getContext('2d');
+    x.fillStyle = col; x.fillRect(0, 0, WC_T, WC_T);
+    x.globalCompositeOperation = 'destination-out'; x.drawImage(wcNoise, 0, 0); // 挖洞＝顏料沒沉積的地方
+    wcPat = x.createPattern(c, 'repeat'); wcCol = col;
+  }
+  return wcPat;
+}
+
 let rest = 0;
 // col 由 draw() 一次讀進來：input[type=color].value 每讀一次都要做值正規化，不該每顆筆印讀
 function stamp(c, col, x, y, r, a) {
   c.globalAlpha = a;
   if (tipImg) { c.drawImage(tipOf(col), x - r, y - r, r * 2, r * 2); return; } // 筆尖圖自帶紋理，蓋過 B.grain／B.hard
-  if (B.grain) c.fillStyle = grainPat(col);
+  if (eraser) c.fillStyle = col; // 橡皮擦一定是實心硬邊
+  else if (B.wet) c.fillStyle = wcGrain(col);
+  else if (B.grain) c.fillStyle = grainPat(col);
   else if (B.hard < 1) { const g = c.createRadialGradient(x, y, r * B.hard, x, y, r); g.addColorStop(0, col); g.addColorStop(1, col + '00'); c.fillStyle = g; }
   else c.fillStyle = col;
   c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
 }
-// 筆刷畫在暫存層；橡皮擦用同一支筆刷直接從圖層擦掉（鉛筆紙紋也能擦出顆粒感）
+// 筆刷畫在暫存層；橡皮擦用同一支筆刷直接從圖層擦掉
 function draw(a, b, e) {
-  const pen = e.pointerType === 'pen', t = B.tilt && pen ? tiltOf(e) : 0;
+  // 橡皮擦不吃筆刷的 flow／grain／硬度／側鋒：一筆就要擦乾淨，不該留下顆粒狀殘影
+  const pen = e.pointerType === 'pen', t = !eraser && B.tilt && pen ? tiltOf(e) : 0;
   const w = width(e) * (1 + 3 * t), m = w / 2 + 2;
-  const fl = B.flow * (pen && B.po ? 1 - B.po + B.po * e.pressure : 1) * (1 - .6 * t);
+  const fl = eraser ? 1 : B.flow * (pen && B.po ? 1 - B.po + B.po * e.pressure : 1) * (1 - .6 * t);
   bb = [Math.min(bb[0], a[0] - m, b[0] - m), Math.min(bb[1], a[1] - m, b[1] - m), Math.max(bb[2], a[0] + m, b[0] + m), Math.max(bb[3], a[1] + m, b[1] + m)];
   const c = eraser ? cur.ctx : tctx, col = $('color').value;
   if (eraser) c.globalCompositeOperation = 'destination-out';
-  const d = Math.hypot(b[0] - a[0], b[1] - a[1]), step = Math.max(1, w * B.sp);
+  const d = Math.hypot(b[0] - a[0], b[1] - a[1]), step = Math.max(1, w * (eraser ? .1 : B.sp));
   let k = rest;
   for (; k <= d; k += step) { const f = d ? k / d : 0; stamp(c, col, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, w / 2, fl); }
   rest = k - d; c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
@@ -558,7 +607,7 @@ const mid = () => midOf(touches);
 let tap = null; // 兩指輕點＝復原、三指輕點＝重做
 
 function startStroke(e, p = pos(e)) {
-  if (!cur.visible) return;
+  if (!cur.visible || cur.locked) return;
   sid = e.pointerId; snapX.clearRect(0, 0, W, H); snapX.drawImage(cur.c, 0, 0); bb = [Infinity, Infinity, -Infinity, -Infinity];
   last = st0 = p; lastEv = e; snapped = false;
   rest = 0; tmp.style.opacity = eraser ? 0 : $('alpha').value / 100 * B.cap;
@@ -703,10 +752,22 @@ function toolUi() {
 $('brush').onclick = () => { eraser = false; eCur = null; toolUi(); drawECur(); };
 $('eraser').onclick = () => { eraser = true; toolUi(); };
 $('add').onclick = () => addLayer();
-$('del').onclick = () => {
-  if (layers.length < 2) return;
-  const i = layers.indexOf(cur), dead = cur; dead.c.remove(); layers.splice(i, 1); forget(dead); purge(dead);
-  cur = layers[Math.max(0, i - 1)]; sync();
+// 刪除圖層：工具列的「刪除」與圖層列上的 ✕ 共用；鎖定的圖層不給刪
+function delLayer(L) {
+  if (layers.length < 2 || !L || L.locked) return;
+  const i = layers.indexOf(L); if (i < 0) return;
+  L.c.remove(); layers.splice(i, 1); forget(L); purge(L);
+  if (cur === L) cur = layers[Math.max(0, i - 1)];
+  sync();
+}
+$('del').onclick = () => delLayer(cur);
+// 清空目前圖層（可復原）：只快照有內容的範圍，空圖層直接略過
+$('clr').onclick = () => {
+  if (cur.locked) return;
+  const b = alphaBox(cur.c); if (!b) return;
+  pushUndo({ l: cur, c: crop(cur.c, b.x, b.y, b.w, b.h), x: b.x, y: b.y });
+  cur.ctx.clearRect(0, 0, W, H); dropImg(cur);
+  list(cur); refresh3d?.(cur);
 };
 const move = d => { const i = layers.indexOf(cur), j = i + d; if (j < 0 || j >= layers.length) return; [layers[i], layers[j]] = [layers[j], layers[i]]; sync(); };
 $('up').onclick = () => move(1);
@@ -715,6 +776,7 @@ $('lalpha').oninput = e => { cur.c.style.opacity = e.target.value / 100; refresh
 $('merge').onclick = () => {
   const i = layers.indexOf(cur); if (i < 1) return;
   const b = layers[i - 1];
+  if (cur.locked || b.locked) return; // 鎖定中的圖層不動
   if (cur.visible) { b.ctx.globalAlpha = cur.c.style.opacity || 1; b.ctx.drawImage(cur.c, 0, 0); b.ctx.globalAlpha = 1; }
   const dead = cur; dead.c.remove(); layers.splice(i, 1); cur = b; forget(dead); dropImg(b);
   purge(dead); purge(b); sync(b);
@@ -735,7 +797,7 @@ const tfUi = () => {
 };
 const tfRender = () => { paintTf(tf.L.ctx, tf.src, tf.m); drawGuide(); tfUi(); };
 function startTf() {
-  if (tf) return;
+  if (tf || cur.locked) return;
   const L = cur, before = crop(L.c, 0, 0, W, H);
   tf = { L, before, src: L.img || before, m: L.img ? { ...L.tf } : { x: 0, y: 0, s: 1, r: 0, fx: 1 } };
   tf.m0 = L.img ? fitTf(L.img) : { ...tf.m };
@@ -777,7 +839,7 @@ addEventListener('keydown', e => { if (tf && (e.metaKey || e.ctrlKey) && e.key.t
 // --- 滴管：下一次點畫布取樣可見圖層的合成顏色 ---
 $('pick').onclick = () => { picking = !picking; toolUi(); drawECur(); };
 function pickColor([x, y]) {
-  picking = false; toolUi();
+  picking = false; eraser = false; toolUi(); // 取完色直接切回筆刷，不用再按一次
   x = Math.floor(x); y = Math.floor(y); if (x < 0 || y < 0 || x >= W || y >= H) return;
   const c = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
   c.fillStyle = '#fff'; c.fillRect(0, 0, 1, 1);
@@ -1077,16 +1139,84 @@ $('impf').onchange = async e => {
   cur = prev; list(base);
 };
 
+const download = (blob, name) => {
+  const u = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'), { href: u, download: name }).click();
+  setTimeout(() => URL.revokeObjectURL(u), 10000);
+};
 $('save').onclick = () => {
   const o = Object.assign(document.createElement('canvas'), { width: W, height: H }), x = o.getContext('2d');
   layers.filter(l => l.visible).forEach(l => { x.globalAlpha = l.c.style.opacity || 1; x.drawImage(l.c, 0, 0); });
   // toBlob 直接產生二進位，不必先組出數 MB 的 base64 字串
-  o.toBlob(b => {
-    if (!b) return;
-    const u = URL.createObjectURL(b);
-    Object.assign(document.createElement('a'), { href: u, download: 'drawing.png' }).click();
-    setTimeout(() => URL.revokeObjectURL(u), 10000);
-  }, 'image/png');
+  o.toBlob(b => b && download(b, 'drawing.png'), 'image/png');
+};
+
+// --- 專案檔（.lpaint）：每個圖層存成一張 PNG，加一段 JSON 中介資料，下次可以接著編輯 ---
+// 容器： "LPNT" | u8 版本 | u32 metaLen | meta(JSON) | u32 n | n × (u32 len + PNG bytes)
+const P_VER = 1;
+// 專案檔可能帶來不同尺寸的畫布，共用的畫布必須一起換掉
+function setDocSize(w, h) {
+  W = w; H = h; fitThumbSize();
+  [snapC, rdC, tmp, pred].forEach(c => { c.width = w; c.height = h; });
+  wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
+}
+async function saveProject() {
+  const meta = {
+    w: W, h: H, cur: layers.indexOf(cur), guide: { ...guide },
+    layers: layers.map(l => ({ name: l.name, visible: !!l.visible, locked: !!l.locked, opacity: +(l.c.style.opacity || 1), guide: !!l.guide })),
+  };
+  const blobs = await Promise.all(layers.map(l => new Promise(r => l.c.toBlob(r, 'image/png'))));
+  const mb = new TextEncoder().encode(JSON.stringify(meta));
+  const size = 5 + 4 + mb.length + 4 + blobs.reduce((s, b) => s + 4 + b.size, 0);
+  const out = new Uint8Array(size), dv = new DataView(out.buffer);
+  let p = 0;
+  out.set([76, 80, 78, 84], p); p += 4;                  // "LPNT"
+  dv.setUint8(p, P_VER); p += 1;
+  dv.setUint32(p, mb.length, true); p += 4; out.set(mb, p); p += mb.length;
+  dv.setUint32(p, blobs.length, true); p += 4;
+  for (const b of blobs) { dv.setUint32(p, b.size, true); p += 4; out.set(new Uint8Array(await b.arrayBuffer()), p); p += b.size; }
+  download(new Blob([out], { type: 'application/octet-stream' }), 'drawing.lpaint');
+}
+async function openProject(file) {
+  const buf = await file.arrayBuffer(), u8 = new Uint8Array(buf), dv = new DataView(buf);
+  if (u8[0] !== 76 || u8[1] !== 80 || u8[2] !== 78 || u8[3] !== 84) throw new Error('不是 .lpaint 專案檔');
+  if (dv.getUint8(4) !== P_VER) throw new Error('專案檔版本不支援（' + dv.getUint8(4) + '）');
+  let p = 5;
+  const ml = dv.getUint32(p, true); p += 4;
+  const meta = JSON.parse(new TextDecoder().decode(u8.subarray(p, p + ml))); p += ml;
+  const cnt = dv.getUint32(p, true); p += 4;
+  const parts = [];
+  for (let i = 0; i < cnt; i++) {
+    const len = dv.getUint32(p, true); p += 4;
+    if (p + len > u8.length) throw new Error('專案檔損毀');
+    parts.push(new Blob([u8.subarray(p, p + len)], { type: 'image/png' })); p += len;
+  }
+  if (!cnt || !meta || !(meta.w > 0) || !(meta.h > 0)) throw new Error('專案檔沒有圖層');
+  stop3d?.(); endTf();
+  if (meta.w !== W || meta.h !== H) setDocSize(meta.w, meta.h);
+  if (meta.guide) Object.assign(guide, meta.guide);
+  const made = [];
+  for (let i = 0; i < cnt; i++) {
+    const m = (meta.layers && meta.layers[i]) || {};
+    const c = Object.assign(document.createElement('canvas'), { width: W, height: H }), ctx = c.getContext('2d');
+    const bm = await createImageBitmap(parts[i]).catch(() => null);
+    if (bm) { ctx.drawImage(bm, 0, 0); bm.close(); }
+    c.style.opacity = m.opacity != null && m.opacity < 1 ? m.opacity : '';
+    made.push({ c, ctx, name: m.name || ('圖層 ' + (i + 1)), visible: m.visible !== false, locked: !!m.locked, guide: !!m.guide });
+  }
+  layers.forEach(l => { l.c.remove(); dropImg(l); });
+  thumbs.clear();
+  layers = made; n = made.length;
+  cur = layers[Math.min(Math.max(0, meta.cur | 0), layers.length - 1)];
+  undos = []; redos = [];
+  $('gmode').value = String(guide.mode || 0);
+  sync(); fit();
+}
+$('psave').onclick = () => saveProject();
+$('popen').onclick = () => $('pfile').click();
+$('pfile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { await openProject(f); } catch (err) { alert('無法開啟這個檔案：' + err.message); }
 };
 
 addLayer(true); addLayer();
