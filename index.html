@@ -29,6 +29,7 @@
     <label>層距 <input id="gap" type="range" min="0" max="300" value="60"></label>
     <label>精細度 <select id="res"><option value="12">低</option><option value="8" selected>中</option><option value="5">高</option></select></label>
     <button id="m3mode" class="on">✏️ 畫圖中</button>
+    <button id="m3spring">🔓 自由檢視</button><button id="m3home">↺ 回正</button><button id="m3lv">🔒 垂直鎖定</button><button id="m3lh">🔒 水平鎖定</button>
     <button id="m3man" class="on">人偶 顯示</button><button id="m3reset">重置姿勢</button><button id="m3save">存成輔助線圖層</button><span id="poses" class="row"></span>
     <label>人偶大小 <input id="msize" type="range" min="30" max="150" value="100"></label>
     <span style="opacity:.6">模式：畫圖→旋轉→擺姿勢</span>
@@ -365,6 +366,36 @@ async function open3d() {
   const sun = new T.DirectionalLight(0xffffff, 2); sun.position.set(500, 800, 1000); scene.add(sun);
   box.append(renderer.domElement);
   const ctl = new OC(cam, renderer.domElement);
+
+  // --- 固定視角（參考 Rubi-Cube）：自動回正、立即回正、垂直/水平鎖定 ---
+  const camHome = new T.Spherical().setFromVector3(cam.position.clone());
+  let spring = false, lockV = false, lockH = false, anim = 0;
+  const setLocks = () => {
+    const az = ctl.getAzimuthalAngle(), po = ctl.getPolarAngle();
+    ctl.minAzimuthAngle = lockH ? az : -Infinity; ctl.maxAzimuthAngle = lockH ? az : Infinity;
+    ctl.minPolarAngle = lockV ? po : 0; ctl.maxPolarAngle = lockV ? po : Math.PI;
+  };
+  const recenter = () => {
+    cancelAnimationFrame(anim);
+    const s0 = new T.Spherical().setFromVector3(cam.position.clone().sub(ctl.target)), t0 = ctl.target.clone(), zero = new T.Vector3();
+    const th1 = lockH ? s0.theta : camHome.theta, ph1 = lockV ? s0.phi : camHome.phi, t1 = performance.now();
+    let dth = th1 - s0.theta; dth = ((dth + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+    const step = now => {
+      const k = Math.min(1, (now - t1) / 360), e = 1 - (1 - k) ** 3;
+      ctl.target.lerpVectors(t0, zero, e);
+      cam.position.setFromSpherical(new T.Spherical(s0.radius + (camHome.radius - s0.radius) * e, s0.phi + (ph1 - s0.phi) * e, s0.theta + dth * e)).add(ctl.target);
+      ctl.update(); if (k < 1) anim = requestAnimationFrame(step);
+    };
+    anim = requestAnimationFrame(step);
+  };
+  ctl.addEventListener('start', () => cancelAnimationFrame(anim));
+  ctl.addEventListener('end', () => { if (spring) recenter(); });
+  const tog = (id, on, a, b) => { $(id).textContent = on ? a : b; $(id).classList.toggle('on', on); };
+  tog('m3spring', false, '', '🔓 自由檢視'); tog('m3lv', false, '', '🔒 垂直鎖定'); tog('m3lh', false, '', '🔒 水平鎖定');
+  $('m3spring').onclick = () => { spring = !spring; tog('m3spring', spring, '🧲 自動回正: 開', '🔓 自由檢視'); if (spring) recenter(); };
+  $('m3home').onclick = recenter;
+  $('m3lv').onclick = () => { lockV = !lockV; tog('m3lv', lockV, '🔒 垂直鎖定中', '🔒 垂直鎖定'); setLocks(); };
+  $('m3lh').onclick = () => { lockH = !lockH; tog('m3lh', lockH, '🔒 水平鎖定中', '🔒 水平鎖定'); setLocks(); };
   const geo = new T.BoxGeometry(1, 1, 1), mat = new T.MeshStandardMaterial();
   // --- 人偶 ---
   const man = new T.Group(); scene.add(man);
@@ -534,7 +565,7 @@ async function open3d() {
   addEventListener('resize', resize);
   stop3d = () => {
     manPose = J.map(j => j.pos.toArray());
-    cancelAnimationFrame(raf); removeEventListener('resize', resize);
+    cancelAnimationFrame(raf); cancelAnimationFrame(anim); removeEventListener('resize', resize);
     ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'].forEach((t, i) => box.removeEventListener(t, [down, move, up, up][i], true));
     ctl.dispose(); renderer.dispose(); renderer.domElement.remove(); m3.style.display = 'none';
     lock(false); stop3d = refresh3d = null; list();
