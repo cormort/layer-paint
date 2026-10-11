@@ -263,6 +263,9 @@ function draw(a, b, e) {
 
 // QuickShape：筆停住 0.5 秒就把這一筆拉直成直線，之後移動可調整終點
 let st0 = null, snapped = false, qs = 0, qsAt = null, lastEv = null;
+// 記住 QuickShape 開關（localStorage 可能在私密瀏覽被擋，失敗就用預設值）
+try { $('qson').checked = localStorage.getItem('qson') !== '0'; } catch {}
+$('qson').onchange = e => { try { localStorage.setItem('qson', e.target.checked ? '1' : '0'); } catch {} };
 function qsArm(e) {
   clearTimeout(qs); qsAt = [e.clientX, e.clientY];
   if (!$('qson').checked) return;
