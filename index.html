@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Paint</title>
+<style>
+  body{margin:0;display:flex;height:100vh;font:14px system-ui;background:#2a2a2e;color:#eee;overflow:hidden;touch-action:none;user-select:none}
+  #stage{flex:1;position:relative;overflow:hidden;touch-action:none}
+  #wrap{position:absolute;left:0;top:0;width:1200px;height:800px;transform-origin:0 0;box-shadow:0 0 20px #000;cursor:crosshair;
+    background:conic-gradient(#ccc 25%,#fff 0 50%,#ccc 0 75%,#fff 0) 0 0/20px 20px}
+  #wrap canvas{position:absolute;inset:0;width:100%;height:100%}
+  aside{width:230px;padding:10px;background:#1c1c1f;overflow:auto;display:flex;flex-direction:column;gap:8px}
+  label{display:flex;align-items:center;gap:6px}
+  label input[type=range]{flex:1}
+  button{background:#3a3a40;color:#eee;border:0;border-radius:6px;padding:6px 8px;cursor:pointer}
+  button.on{background:#4a7cff}
+  .row{display:flex;gap:4px;flex-wrap:wrap}
+  #m3 .row{gap:6px}#m3 .row label{white-space:nowrap}#m3 input[type=range]{flex:none;width:80px}#m3 .row>span{font-size:12px}
+  .layer{display:flex;align-items:center;gap:6px;padding:6px;border-radius:6px;background:#2a2a2e;cursor:pointer}
+  .layer.sel{outline:2px solid #4a7cff}
+  .layer canvas{width:40px;height:27px;background:#fff;border-radius:3px}
+  .layer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<div id="m3" style="display:none;position:fixed;inset:0 230px 0 0;z-index:9;background:#15151a;flex-direction:column">
+  <div class="row" style="padding:8px;align-items:center">
+    <button id="m3x">✕ 關閉</button>
+    <label>厚度 <input id="depth" type="range" min="2" max="300" value="30"></label>
+    <label>層距 <input id="gap" type="range" min="0" max="300" value="60"></label>
+    <label>精細度 <select id="res"><option value="12">低</option><option value="8" selected>中</option><option value="5">高</option></select></label>
+    <button id="m3mode" class="on">✏️ 畫圖中</button>
+    <button id="m3man" class="on">人偶 顯示</button><button id="m3reset">重置姿勢</button><button id="m3save">存成輔助線圖層</button><span id="poses" class="row"></span>
+    <label>人偶大小 <input id="msize" type="range" min="30" max="150" value="100"></label>
+    <span style="opacity:.6">模式：畫圖→旋轉→擺姿勢</span>
+  </div>
+  <div id="m3c" style="flex:1;min-height:0"></div>
+</div>
+<div id="stage"><div id="wrap"></div></div>
+<aside>
+  <div class="row">
+    <button id="brush" class="on">筆刷</button><button id="eraser">橡皮擦</button>
+    <button id="undo">↶</button><button id="redo">↷</button><button id="fit">適合畫面</button>
+  </div>
+  <select id="bsel" style="padding:6px;border-radius:6px;background:#3a3a40;color:#eee;border:0"></select>
+  <label>顏色 <input id="color" type="color" value="#222222"></label>
+  <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
+  <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
+  <label>輔助線 <select id="gmode" style="flex:1;padding:6px;border-radius:6px;background:#3a3a40;color:#eee;border:0">
+    <option value="0">關</option><option value="1">1 點透視</option><option value="2">2 點透視</option><option value="3">3 點透視</option></select></label>
+  <label>線數 <input id="gn" type="range" min="4" max="48" value="16"></label>
+  <button id="gbake">輔助線存成圖層</button>
+  <hr style="width:100%;border-color:#333">
+  <div class="row">
+    <button id="add">＋圖層</button><button id="del">刪除</button>
+    <button id="up">▲</button><button id="down">▼</button>
+    <button id="merge">向下合併</button><button id="d3">3D 柱體</button>
+  </div>
+  <label>圖層透明度 <input id="lalpha" type="range" min="0" max="100" value="100"></label>
+  <div id="list" style="display:flex;flex-direction:column;gap:4px"></div>
+  <button id="save">匯出 PNG</button>
+</aside>
+<script>
+const W = 1200, H = 800;
+const $ = id => document.getElementById(id);
+const wrap = $('wrap');
+let layers = [], cur = null, eraser = false, n = 0, undos = [], redos = [];
+
+// 暫存筆劃層：筆刷畫在這裡，放開時才以「濃度」合成到圖層，避免重疊處變深
+const tmp = Object.assign(document.createElement('canvas'), { width: W, height: H });
+tmp.style.pointerEvents = 'none';
+const tctx = tmp.getContext('2d');
+
+const stage = $('stage'), v = { x: 0, y: 0, s: 1 };
+const apply = () => { wrap.style.transform = `translate(${v.x}px,${v.y}px) scale(${v.s})`; if (typeof drawGuide === 'function' && gcv) drawGuide(); };
+function fit() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  v.s = Math.min((w - 40) / W, (h - 40) / H, 1);
+  v.x = (w - W * v.s) / 2; v.y = (h - H * v.s) / 2; apply();
+}
+// 以螢幕點 (cx,cy) 為中心縮放
+function zoomAt(cx, cy, k) {
+  const r = stage.getBoundingClientRect(), x = cx - r.left, y = cy - r.top;
+  const s = Math.min(16, Math.max(0.02, v.s * k)); k = s / v.s;
+  v.x = x - (x - v.x) * k; v.y = y - (y - v.y) * k; v.s = s; apply();
+}
+// --- 透視輔助線：地平線與消失點可拖曳（座標用畫布像素），畫在 stage 上方的獨立覆蓋層 ---
+const guide = { mode: 0, hy: 400, v1: 250, v2: 1000, v3x: 600, v3y: 2600 };
+const gcv = Object.assign(document.createElement('canvas'), {}); gcv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+stage.append(gcv);
+const gHandles = () => {
+  const h = [{ id: 'hy', x: 40, y: guide.hy }, { id: 'v1', x: guide.v1, y: guide.hy }];
+  if (guide.mode > 1) h.push({ id: 'v2', x: guide.v2, y: guide.hy });
+  if (guide.mode > 2) h.push({ id: 'v3', x: guide.v3x, y: guide.v3y });
+  return h;
+};
+// 從每個消失點放射 n 條線；ctx 的座標系已是畫布像素
+function guideLines(ctx, lw) {
+  const n = +$('gn').value, vps = [[guide.v1, guide.hy, '#e33'], [guide.v2, guide.hy, '#2a2'], [guide.v3x, guide.v3y, '#36f']].slice(0, guide.mode === 3 ? 3 : guide.mode === 2 ? 2 : 1);
+  ctx.lineWidth = lw; ctx.globalAlpha = .6;
+  vps.forEach(([x, y, col]) => {
+    ctx.strokeStyle = col; ctx.beginPath();
+    for (let k = 0; k < n; k++) { const a = k * Math.PI / n, dx = Math.cos(a) * 8000, dy = Math.sin(a) * 8000; ctx.moveTo(x - dx, y - dy); ctx.lineTo(x + dx, y + dy); }
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+}
+function drawGuide() {
+  const d = devicePixelRatio || 1, w = stage.clientWidth, h = stage.clientHeight;
+  gcv.width = w * d; gcv.height = h * d;
+  if (!guide.mode) return;
+  const c = gcv.getContext('2d');
+  c.save(); c.setTransform(d * v.s, 0, 0, d * v.s, d * v.x, d * v.y);
+  c.beginPath(); c.rect(0, 0, W, H); c.clip();
+  guideLines(c, 1.2 / v.s);
+  c.restore();
+  c.setTransform(d, 0, 0, d, 0, 0);
+  c.strokeStyle = '#fc0'; c.setLineDash([8, 6]); c.lineWidth = 1.5;
+  const hy = guide.hy * v.s + v.y; c.beginPath(); c.moveTo(0, hy); c.lineTo(w, hy); c.stroke(); c.setLineDash([]);
+  gHandles().forEach(p => { c.beginPath(); c.arc(p.x * v.s + v.x, p.y * v.s + v.y, 9, 0, 6.283); c.fillStyle = { hy: '#fc0', v1: '#e33', v2: '#2a2', v3: '#36f' }[p.id]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke(); });
+}
+$('gmode').onchange = e => { guide.mode = +e.target.value; drawGuide(); };
+$('gn').oninput = drawGuide;
+$('gbake').onclick = () => {
+  if (!guide.mode) return;
+  addLayer(); cur.name = '透視輔助線'; cur.guide = true;
+  guideLines(cur.ctx, 2); list();
+};
+let gdrag = null;
+addEventListener('resize', fit); fit();
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01)); // 觸控板捏合 / Ctrl+滾輪
+  else { v.x -= e.deltaX; v.y -= e.deltaY; apply(); }
+}, { passive: false });
+
+function addLayer(fill) {
+  const c = Object.assign(document.createElement('canvas'), { width: W, height: H });
+  const L = { c, ctx: c.getContext('2d'), name: '圖層 ' + (++n), visible: true };
+  if (fill) { L.ctx.fillStyle = '#fff'; L.ctx.fillRect(0, 0, W, H); L.name = '背景'; }
+  layers.splice(cur ? layers.indexOf(cur) + 1 : 0, 0, L);
+  cur = L; sync();
+}
+function sync() {
+  layers.forEach(l => wrap.append(l.c));
+  wrap.append(tmp); // 暫存層永遠在最上面
+  list();
+}
+function list() {
+  $('lalpha').value = (cur.c.style.opacity || 1) * 100;
+  $('list').replaceChildren(...[...layers].reverse().map(l => {
+    const d = document.createElement('div');
+    d.className = 'layer' + (l === cur ? ' sel' : '');
+    const th = document.createElement('canvas'); th.width = 40; th.height = 27;
+    th.getContext('2d').drawImage(l.c, 0, 0, 40, 27);
+    const eye = document.createElement('button'); eye.textContent = l.visible ? '👁' : '—';
+    eye.disabled = !!stop3d;
+    eye.onclick = e => { e.stopPropagation(); l.visible = !l.visible; l.c.style.display = l.visible ? '' : 'none'; list(); };
+    const nm = document.createElement('span'); nm.textContent = l.name; nm.title = '雙擊重新命名';
+    nm.ondblclick = () => { const t = prompt('圖層名稱', l.name); if (t) { l.name = t; list(); } };
+    d.append(th, nm, eye);
+    d.onclick = () => { cur = l; list(); };
+    return d;
+  }));
+}
+
+// --- 繪圖 ---
+let last = null, snap = null;
+const pos = e => { const r = wrap.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+// pr 壓力影響、hard 邊緣硬度、flow 每次落點濃度、sp 間距(直徑比)、scat 顆粒散布、cap 整筆濃度上限
+const BRUSHES = {
+  '鋼筆':   { pr: .8, hard: 1,   flow: 1,   sp: .1,  scat: 0, cap: 1 },
+  '鉛筆':   { pr: .5, hard: 1,   flow: .5,  sp: .25, scat: 1, cap: 1, grain: 1 },
+  'Marker': { pr: 0,  hard: 1,   flow: 1,   sp: .1,  scat: 0, cap: .6 },
+  '水彩':   { pr: .6, hard: 0,   flow: .08, sp: .12, scat: 0, cap: .7 },
+  '噴槍':   { pr: .5, hard: 0,   flow: .15, sp: .1,  scat: 0, cap: 1 },
+};
+let B = BRUSHES['鋼筆'];
+$('bsel').append(...Object.keys(BRUSHES).map(k => new Option(k)));
+$('bsel').onchange = e => B = BRUSHES[e.target.value];
+const width = e => { const z = $('size').value; return e.pointerType === 'pen' ? z * (1 - B.pr + B.pr * e.pressure) : z; };
+
+let rest = 0;
+function stamp(x, y, r) {
+  const c = tctx, col = $('color').value;
+  c.fillStyle = col;
+  if (B.grain) { // 鉛筆：在範圍內撒小點
+    c.globalAlpha = B.flow;
+    for (let i = 0; i < r * 1.5 + 2; i++) {
+      const a = Math.random() * 6.283, d = Math.sqrt(Math.random()) * r;
+      c.fillRect(x + Math.cos(a) * d, y + Math.sin(a) * d, 1.2, 1.2);
+    }
+    return;
+  }
+  c.globalAlpha = B.flow;
+  if (B.hard < 1) {
+    const g = c.createRadialGradient(x, y, r * B.hard, x, y, r);
+    g.addColorStop(0, col); g.addColorStop(1, col + '00'); c.fillStyle = g;
+  }
+  c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
+}
+function draw(a, b, e) {
+  const w = width(e);
+  if (eraser) return seg(target(), a, b, w);
+  const d = Math.hypot(b[0] - a[0], b[1] - a[1]), step = Math.max(1, w * B.sp);
+  let t = rest;
+  for (; t <= d; t += step) { const k = d ? t / d : 0; stamp(a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, w / 2); }
+  rest = t - d; tctx.globalAlpha = 1;
+}
+
+function seg(ctx, a, b, w) {
+  ctx.lineWidth = w; ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+}
+function target() {
+  if (eraser) { cur.ctx.globalCompositeOperation = 'destination-out'; cur.ctx.strokeStyle = '#000'; return cur.ctx; }
+  tctx.strokeStyle = $('color').value; return tctx;
+}
+let sid = null, pen = false, pan = null, space = false;
+const touches = new Map();
+const mid = () => { const p = [...touches.values()]; return [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2, Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1])]; };
+
+function startStroke(e, p = pos(e)) {
+  if (!cur.visible) return;
+  sid = e.pointerId; snap = cur.ctx.getImageData(0, 0, W, H);
+  last = p;
+  rest = 0; tmp.style.opacity = eraser ? 0 : $('alpha').value / 100 * B.cap;
+  draw(last, last, e); cur.ctx.globalCompositeOperation = 'source-over';
+}
+function cancelStroke() {
+  if (!last) return;
+  cur.ctx.putImageData(snap, 0, 0); tctx.clearRect(0, 0, W, H); last = null;
+}
+stage.onpointerdown = e => {
+  stage.setPointerCapture(e.pointerId);
+  if (guide.mode) { // 先檢查是否按在消失點／地平線把手上
+    const r = stage.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, R = e.pointerType === 'touch' ? 30 : 16;
+    const h = gHandles().find(p => Math.hypot(p.x * v.s + v.x - px, p.y * v.s + v.y - py) < R);
+    if (h) { gdrag = { id: h.id, pid: e.pointerId }; return; }
+  }
+  if (e.pointerType === 'pen') pen = true;
+  if (e.pointerType === 'touch') {
+    touches.set(e.pointerId, [e.clientX, e.clientY]);
+    if (touches.size >= 2) cancelStroke();
+    if (touches.size >= 2 || pen) return; // 兩指一律是手勢；偵測到 Apple Pencil 後單指也只負責平移
+  } else if (e.button === 1 || space) { pan = [e.clientX, e.clientY]; return; }
+  startStroke(e);
+};
+stage.onpointermove = e => {
+  if (gdrag) {
+    if (e.pointerId === gdrag.pid) {
+      const p = pos(e), id = gdrag.id;
+      if (id === 'hy') guide.hy = p[1]; else if (id === 'v3') { guide.v3x = p[0]; guide.v3y = p[1]; } else guide[id] = p[0];
+      drawGuide();
+    }
+    return;
+  }
+  if (touches.has(e.pointerId)) {
+    const old = touches.size === 2 ? mid() : null, prev = touches.get(e.pointerId);
+    touches.set(e.pointerId, [e.clientX, e.clientY]);
+    if (old) {
+      const n = mid(); zoomAt(old[0], old[1], n[2] / old[2]);
+      v.x += n[0] - old[0]; v.y += n[1] - old[1]; apply();
+    } else if (pen && touches.size === 1) { v.x += e.clientX - prev[0]; v.y += e.clientY - prev[1]; apply(); }
+    if (touches.size > 1 || pen) return;
+  }
+  if (pan) { v.x += e.clientX - pan[0]; v.y += e.clientY - pan[1]; pan = [e.clientX, e.clientY]; apply(); return; }
+  if (!last || e.pointerId !== sid) return;
+  for (const ev of (e.getCoalescedEvents?.() || [e])) {
+    const p = pos(ev);
+    draw(last, p, ev); last = p;
+  }
+  cur.ctx.globalCompositeOperation = 'source-over';
+};
+stage.onpointerup = stage.onpointercancel = e => {
+  touches.delete(e.pointerId); pan = null;
+  if (gdrag && e.pointerId === gdrag.pid) { gdrag = null; return; }
+  if (!last || e.pointerId !== sid) return;
+  finishStroke();
+};
+function finishStroke() {
+  last = null;
+  if (!eraser) {
+    cur.ctx.globalAlpha = $('alpha').value / 100 * B.cap;
+    cur.ctx.drawImage(tmp, 0, 0); cur.ctx.globalAlpha = 1;
+    tctx.clearRect(0, 0, W, H);
+  }
+  undos.push({ l: cur, d: snap }); if (undos.length > 30) undos.shift(); redos = [];
+  list();
+}
+addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { space = true; e.preventDefault(); } });
+addEventListener('keyup', e => { if (e.code === 'Space') space = false; });
+
+// --- 復原 / 重做 ---
+function swap(from, to) {
+  const s = from.pop(); if (!s) return;
+  if (!layers.includes(s.l)) return swap(from, to);
+  to.push({ l: s.l, d: s.l.ctx.getImageData(0, 0, W, H) });
+  s.l.ctx.putImageData(s.d, 0, 0); list(); refresh3d?.(s.l);
+}
+$('undo').onclick = () => swap(undos, redos);
+$('redo').onclick = () => swap(redos, undos);
+addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? $('redo').click() : $('undo').click(); }
+});
+
+// --- 工具列 ---
+$('fit').onclick = fit;
+$('brush').onclick = () => { eraser = false; $('brush').classList.add('on'); $('eraser').classList.remove('on'); };
+$('eraser').onclick = () => { eraser = true; $('eraser').classList.add('on'); $('brush').classList.remove('on'); };
+$('add').onclick = () => addLayer();
+$('del').onclick = () => {
+  if (layers.length < 2) return;
+  const i = layers.indexOf(cur); cur.c.remove(); layers.splice(i, 1);
+  cur = layers[Math.max(0, i - 1)]; sync();
+};
+const move = d => { const i = layers.indexOf(cur), j = i + d; if (j < 0 || j >= layers.length) return; [layers[i], layers[j]] = [layers[j], layers[i]]; sync(); };
+$('up').onclick = () => move(1);
+$('down').onclick = () => move(-1);
+$('lalpha').oninput = e => { cur.c.style.opacity = e.target.value / 100; };
+$('merge').onclick = () => {
+  const i = layers.indexOf(cur); if (i < 1) return;
+  const b = layers[i - 1];
+  if (cur.visible) { b.ctx.globalAlpha = cur.c.style.opacity || 1; b.ctx.drawImage(cur.c, 0, 0); b.ctx.globalAlpha = 1; }
+  cur.c.remove(); layers.splice(i, 1); cur = b;
+  undos = undos.filter(u => u.l !== b); redos = redos.filter(u => u.l !== b); sync();
+};
+
+// --- 3D 柱體：每個可見圖層取樣成一片方塊板，由下到上（後到前）依層距排開 ---
+let stop3d = null, refresh3d = null, manPose = null;
+// 預設姿勢：只列出要改的關節座標（未列者用站姿），套用後會依骨長自動校正
+const POSES = {
+  站: {},
+  T字: { lEl: [-220, 240, 0], lWr: [-370, 240, 0], rEl: [220, 240, 0], rWr: [370, 240, 0] },
+  坐: { lKn: [-40, -5, 190], lAn: [-40, -195, 190], lTo: [-40, -200, 260], rKn: [40, -5, 190], rAn: [40, -195, 190], rTo: [40, -200, 260],
+        lEl: [-80, 110, 40], lWr: [-55, 10, 150], rEl: [80, 110, 40], rWr: [55, 10, 150] },
+  跑: { chest: [0, 135, 25], neck: [0, 245, 60], head: [0, 330, 100],
+        lKn: [-40, -80, 150], lAn: [-40, -200, 100], lTo: [-40, -210, 170], rKn: [40, -150, -100], rAn: [40, -60, -290], rTo: [40, -50, -220],
+        lEl: [-80, 150, -100], lWr: [-70, 200, 0], rEl: [80, 160, 100], rWr: [75, 230, 200] },
+  跳: { lEl: [-110, 380, 0], lWr: [-125, 520, 0], rEl: [110, 380, 0], rWr: [125, 520, 0],
+        lKn: [-50, -100, 100], lAn: [-50, -230, -30], lTo: [-50, -240, 40], rKn: [50, -100, 100], rAn: [50, -230, -30], rTo: [50, -240, 40] },
+  揮手: { rEl: [130, 300, 0], rWr: [150, 430, 20] },
+};
+// 人偶骨架：[名稱, 父節點, x, y, z, 半徑]；骨長固定，拖曳關節時其下的子節點整段跟著平移
+const JOINTS = [
+  ['pelvis', null, 0, 0, 0, 32], ['chest', 'pelvis', 0, 140, 0, 38], ['neck', 'chest', 0, 250, 0, 14], ['head', 'neck', 0, 335, 0, 45],
+  ...[['l', -1], ['r', 1]].flatMap(([p, k]) => [
+    [p + 'Sh', 'neck', 75 * k, 240, 0, 18], [p + 'El', p + 'Sh', 85 * k, 95, 0, 14], [p + 'Wr', p + 'El', 85 * k, -55, 0, 11],
+    [p + 'Hip', 'pelvis', 40 * k, -5, 0, 20], [p + 'Kn', p + 'Hip', 40 * k, -200, 0, 16],
+    [p + 'An', p + 'Kn', 40 * k, -390, 0, 12], [p + 'To', p + 'An', 40 * k, -400, 70, 9]]),
+];
+async function open3d() {
+  let T, OC;
+  try { T = await import('three'); OC = (await import('three/addons/controls/OrbitControls.js')).OrbitControls; }
+  catch { return alert('需要網路連線來載入 three.js'); }
+  const box = $('m3c'), m3 = $('m3'); m3.style.display = 'flex';
+  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save'].forEach(i => $(i).disabled = on);
+  lock(true);
+  const mkLs = () => layers.filter(l => l.visible && !l.guide).map(l => ({ l, px: null, mesh: null }));
+  let ls = mkLs();
+  const sc = Object.assign(document.createElement('canvas'), { width: W, height: H }), sx = sc.getContext('2d', { willReadFrequently: true });
+  const renderer = new T.WebGLRenderer({ antialias: true });
+  const scene = new T.Scene(), cam = new T.PerspectiveCamera(40, 1, 10, 10000);
+  cam.position.set(0, -300, 1600);
+  scene.add(new T.AmbientLight(0xffffff, 1.2));
+  const sun = new T.DirectionalLight(0xffffff, 2); sun.position.set(500, 800, 1000); scene.add(sun);
+  box.append(renderer.domElement);
+  const ctl = new OC(cam, renderer.domElement);
+  const geo = new T.BoxGeometry(1, 1, 1), mat = new T.MeshStandardMaterial();
+  // --- 人偶 ---
+  const man = new T.Group(); scene.add(man);
+  const J = JOINTS.map(([name, par, x, y, z, r], i) => ({ name, par: JOINTS.findIndex(j => j[0] === par), r, i, kids: [], pos: new T.Vector3(x, y, z) }));
+  if (manPose) J.forEach((j, i) => j.pos.fromArray(manPose[i]));
+  const home = JOINTS.map(([, , x, y, z]) => [x, y, z]);
+  const jmat = new T.MeshStandardMaterial({ color: 0xd8dbe3 }), hot = new T.MeshStandardMaterial({ color: 0xff9a3c });
+  J.forEach(j => {
+    if (j.par >= 0) { J[j.par].kids.push(j); j.len = j.pos.distanceTo(J[j.par].pos); }
+    j.mesh = new T.Mesh(new T.SphereGeometry(1, 16, 12), jmat); j.mesh.scale.setScalar(j.r); j.mesh.userData.j = j; man.add(j.mesh);
+    if (j.par >= 0) { j.bone = new T.Mesh(new T.CylinderGeometry(1, 1, 1, 12), jmat); man.add(j.bone); }
+  });
+  const sub = (j, f) => { f(j); j.kids.forEach(k => sub(k, f)); };
+  const up_ = new T.Vector3(0, 1, 0), tmpV = new T.Vector3();
+  const updateMan = () => J.forEach(j => {
+    j.mesh.position.copy(j.pos);
+    if (!j.bone) return;
+    const a = J[j.par].pos, d = tmpV.subVectors(j.pos, a), len = d.length() || 1e-3;
+    j.bone.position.copy(a).addScaledVector(d, .5);
+    j.bone.quaternion.setFromUnitVectors(up_, d.normalize());
+    j.bone.scale.set((j.r + J[j.par].r) * .45, len, (j.r + J[j.par].r) * .45);
+  });
+  const setSize = () => man.scale.setScalar($('msize').value / 100);
+  $('msize').oninput = setSize; setSize();
+  $('m3man').onclick = () => { man.visible = !man.visible; $('m3man').textContent = man.visible ? '人偶 顯示' : '人偶 隱藏'; $('m3man').classList.toggle('on', man.visible); };
+  $('m3reset').onclick = () => J.forEach((j, i) => j.pos.fromArray(home[i]));
+  let grab = null;
+
+  // 把目前視角下的人偶與透視格線投影成 2D，存成兩個新圖層（輔助線圖層不會顯示在 3D 裡）
+  $('m3save').onclick = () => {
+    cam.updateMatrixWorld(true); man.updateMatrixWorld(true);
+    const cw = box.clientWidth, ch = box.clientHeight, vh = ch / 2 * Math.min(W / cw, H / ch), f = cam.projectionMatrix.elements[5], NEAR = -10;
+    const toC = v => v.clone().applyMatrix4(cam.matrixWorldInverse);
+    const sp = p => [W / 2 + f * vh * p.x / -p.z, H / 2 - f * vh * p.y / -p.z];
+    const prev = cur, sc = man.scale.x;
+    const newLayer = name => { addLayer(); cur.name = name; cur.guide = true; return cur.ctx; };
+
+    const g = newLayer('透視輔助線'); g.lineWidth = 2; g.globalAlpha = .7;
+    const line3 = (a, b, col) => {
+      let p = toC(a), q = toC(b);
+      if (p.z > NEAR && q.z > NEAR) return;
+      if (p.z > NEAR) p = p.clone().lerp(q, (NEAR - p.z) / (q.z - p.z)); else if (q.z > NEAR) q = q.clone().lerp(p, (NEAR - q.z) / (p.z - q.z));
+      g.strokeStyle = col; g.beginPath(); g.moveTo(...sp(p)); g.lineTo(...sp(q)); g.stroke();
+    };
+    const y0 = -400 * sc, V = (x, y, z) => new T.Vector3(x, y, z);
+    for (let t = -1500; t <= 1500; t += 250) { line3(V(-3000, y0, t), V(3000, y0, t), '#e33'); line3(V(t, y0, -3000), V(t, y0, 3000), '#2a2'); }
+    for (let x = -750; x <= 750; x += 375) for (let z = -750; z <= 750; z += 375) line3(V(x, y0, z), V(x, y0 + 2400, z), '#36f');
+
+    const m = newLayer('人偶'); m.globalAlpha = .6; m.lineCap = 'round';
+    const wp = j => toC(man.localToWorld(j.pos.clone())), items = [];
+    J.forEach(j => {
+      const b = wp(j); if (b.z > NEAR) return;
+      items.push({ z: b.z, f: () => { const k = f * vh / -b.z, c = sp(b); m.beginPath(); m.arc(c[0], c[1], j.r * sc * k, 0, 6.283); m.fillStyle = '#ddd'; m.strokeStyle = '#555'; m.lineWidth = 2; m.fill(); m.stroke(); } });
+      if (j.par < 0) return;
+      const a = wp(J[j.par]); if (a.z > NEAR) return;
+      items.push({ z: (a.z + b.z) / 2, f: () => {
+        const k = f * vh / -((a.z + b.z) / 2), w = (j.r + J[j.par].r) * .9 * sc * k;
+        m.beginPath(); m.moveTo(...sp(a)); m.lineTo(...sp(b));
+        m.strokeStyle = '#555'; m.lineWidth = w + 4; m.stroke(); m.strokeStyle = '#ddd'; m.lineWidth = w; m.stroke();
+      } });
+    });
+    items.sort((p, q) => p.z - q.z).forEach(i => i.f());
+
+    cur = prev; list();
+    ls.forEach(e => { if (e.mesh) { scene.remove(e.mesh); e.mesh.dispose(); } }); ls = mkLs(); build();
+  };
+  const applyPose = name => {
+    J.forEach((j, i) => j.pos.fromArray(POSES[name][j.name] || home[i]));
+    J.forEach(j => { if (j.par >= 0) { const p = J[j.par].pos; j.pos.sub(p).setLength(j.len).add(p); } });
+  };
+  $('poses').replaceChildren(...Object.keys(POSES).map(k => Object.assign(document.createElement('button'), { textContent: k, onclick: () => applyPose(k) })));
+  const zOf = n => (n - (ls.length - 1) / 2) * (+$('depth').value + +$('gap').value);
+
+  function buildLayer(n) {
+    const e = ls[n]; if (e.mesh) { scene.remove(e.mesh); e.mesh.dispose(); }
+    if (!e.px) e.px = e.l.ctx.getImageData(0, 0, W, H).data;
+    const st = +$('res').value, dp = +$('depth').value, z = zOf(n), a = +(e.l.c.style.opacity || 1), px = e.px, cells = [];
+    for (let y = 0; y < H; y += st) for (let x = 0; x < W; x += st) {
+      const i = (Math.min(H - 1, y + st / 2 | 0) * W + Math.min(W - 1, x + st / 2 | 0)) * 4;
+      if (px[i + 3] * a > 40) cells.push([x, y, px[i], px[i + 1], px[i + 2]]);
+    }
+    const m = new T.Matrix4(), c = new T.Color(), mesh = new T.InstancedMesh(geo, mat, Math.max(1, cells.length));
+    cells.forEach(([x, y, r, g, b], k) => {
+      m.compose(new T.Vector3(x - W / 2 + st / 2, H / 2 - y - st / 2, z), new T.Quaternion(), new T.Vector3(st, st, dp));
+      mesh.setMatrixAt(k, m); mesh.setColorAt(k, c.setRGB(r / 255, g / 255, b / 255, T.SRGBColorSpace));
+    });
+    mesh.count = cells.length; e.mesh = mesh; scene.add(mesh);
+  }
+  const build = () => ls.forEach((_, n) => buildLayer(n));
+
+  // 筆劃進行中（在暫存層）也要看得到：合成後重建該層方塊，每個畫面最多一次
+  const pend = new Set();
+  refresh3d = l => {
+    if (!pend.size) requestAnimationFrame(() => {
+      pend.forEach(l => {
+        const n = ls.findIndex(e => e.l === l); if (n < 0) return;
+        sx.clearRect(0, 0, W, H); sx.drawImage(l.c, 0, 0);
+        if (l === cur && last) { sx.globalAlpha = +tmp.style.opacity || 0; sx.drawImage(tmp, 0, 0); sx.globalAlpha = 1; }
+        ls[n].px = sx.getImageData(0, 0, W, H).data; buildLayer(n);
+      });
+      pend.clear();
+    });
+    pend.add(l);
+  };
+
+  // 把螢幕座標投到「目前圖層所在的平面」，換算成畫布座標
+  const ray = new T.Raycaster(), plane = new T.Plane(new T.Vector3(0, 0, 1)), hit = new T.Vector3();
+  const aim = ev => {
+    const r = renderer.domElement.getBoundingClientRect();
+    ray.setFromCamera({ x: (ev.clientX - r.left) / r.width * 2 - 1, y: -((ev.clientY - r.top) / r.height * 2 - 1) }, cam);
+  };
+  const pick = ev => {
+    const n = ls.findIndex(e => e.l === cur); if (n < 0) return null;
+    aim(ev);
+    plane.constant = -zOf(n);
+    return ray.ray.intersectPlane(plane, hit) ? [hit.x + W / 2, H / 2 - hit.y] : null;
+  };
+  let mode = 0; // 0 畫圖 1 旋轉 2 擺姿勢
+  $('m3mode').onclick = () => {
+    mode = (mode + 1) % 3;
+    $('m3mode').textContent = ['✏️ 畫圖中', '🔄 旋轉中', '🕴 擺姿勢中'][mode]; $('m3mode').classList.toggle('on', mode !== 1);
+  };
+  const dragPlane = new T.Plane(), P = new T.Vector3();
+  const down = e => {
+    if (mode === 2) {
+      if (!man.visible) return;
+      aim(e);
+      const h = ray.intersectObjects(J.map(j => j.mesh))[0]; if (!h) return;
+      grab = h.object.userData.j; grab.pid = e.pointerId;
+      dragPlane.setFromNormalAndCoplanarPoint(cam.getWorldDirection(P).clone(), h.point);
+      e.stopPropagation(); box.setPointerCapture(e.pointerId); grab.mesh.material = hot; return;
+    }
+    if (e.pointerType !== 'pen' && mode !== 0) return;
+    const p = pick(e); if (!p) return;
+    e.stopPropagation(); box.setPointerCapture(e.pointerId);
+    startStroke(e, p); refresh3d(cur);
+  };
+  const move = e => {
+    if (grab) {
+      if (e.pointerId !== grab.pid) return;
+      e.stopPropagation(); aim(e);
+      if (!ray.ray.intersectPlane(dragPlane, P)) return;
+      man.worldToLocal(P);
+      const par = grab.par >= 0 ? J[grab.par].pos : null;
+      if (par) P.sub(par).setLength(grab.len).add(par); // 骨長固定
+      const d = P.sub(grab.pos).clone();
+      sub(grab, j => j.pos.add(d));
+      return;
+    }
+    if (!last || e.pointerId !== sid) return;
+    e.stopPropagation();
+    for (const ev of (e.getCoalescedEvents?.() || [e])) { const p = pick(ev); if (p) { draw(last, p, ev); last = p; } }
+    cur.ctx.globalCompositeOperation = 'source-over'; refresh3d(cur);
+  };
+  const up = e => {
+    if (grab && e.pointerId === grab.pid) { grab.mesh.material = jmat; grab = null; return; }
+    if (!last || e.pointerId !== sid) return; e.stopPropagation(); finishStroke(); refresh3d(cur);
+  };
+  box.addEventListener('pointerdown', down, true);
+  box.addEventListener('pointermove', move, true);
+  box.addEventListener('pointerup', up, true);
+  box.addEventListener('pointercancel', up, true);
+
+  const resize = () => { const w = box.clientWidth, h = box.clientHeight; renderer.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix(); };
+  let raf; const loop = () => { raf = requestAnimationFrame(loop); updateMan(); ctl.update(); renderer.render(scene, cam); };
+  $('depth').oninput = $('gap').oninput = $('res').onchange = build;
+  addEventListener('resize', resize);
+  stop3d = () => {
+    manPose = J.map(j => j.pos.toArray());
+    cancelAnimationFrame(raf); removeEventListener('resize', resize);
+    ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'].forEach((t, i) => box.removeEventListener(t, [down, move, up, up][i], true));
+    ctl.dispose(); renderer.dispose(); renderer.domElement.remove(); m3.style.display = 'none';
+    lock(false); stop3d = refresh3d = null; list();
+  };
+  resize(); build(); loop();
+}
+$('d3').onclick = open3d;
+$('m3x').onclick = () => stop3d?.();
+
+$('save').onclick = () => {
+  const o = Object.assign(document.createElement('canvas'), { width: W, height: H }), x = o.getContext('2d');
+  layers.filter(l => l.visible).forEach(l => { x.globalAlpha = l.c.style.opacity || 1; x.drawImage(l.c, 0, 0); });
+  Object.assign(document.createElement('a'), { href: o.toDataURL(), download: 'drawing.png' }).click();
+};
+
+addLayer(true); addLayer();
+</script>
