@@ -19,7 +19,7 @@
     -webkit-touch-callout:none;-webkit-user-drag:none;overscroll-behavior:none}
   #stage{flex:1;position:relative;overflow:hidden;touch-action:none;overscroll-behavior:none;
     background:radial-gradient(120% 90% at 50% 40%,#45484e 0%,var(--desk) 55%,#2f3135 100%)}
-  #wrap{position:absolute;left:0;top:0;width:1200px;height:800px;transform-origin:0 0;cursor:crosshair;
+  #wrap{position:absolute;left:0;top:0;width:1200px;height:1600px;transform-origin:0 0;cursor:crosshair;
     box-shadow:0 1px 2px rgba(0,0,0,.35),0 18px 50px rgba(0,0,0,.45);
     background:conic-gradient(#d9d9d9 25%,#fff 0 50%,#d9d9d9 0 75%,#fff 0) 0 0/20px 20px}
   /* 讓命中測試直接落在 stage，不必穿過每張圖層畫布 */
@@ -87,7 +87,7 @@
   .layer{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
   .layer:hover{background:var(--field)}
   .layer.sel{background:var(--field);border-color:var(--line);box-shadow:inset 3px 0 0 var(--blue)}
-  .layer canvas{width:54px;height:36px;flex:none;background:#fff;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+  .layer canvas{width:36px;height:48px;flex:none;background:#fff;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
   .layer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .layer button{border:0;background:transparent;min-height:30px;padding:0 6px;opacity:.75}
   .layer button:hover{opacity:1}
@@ -149,6 +149,12 @@
     <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
     <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
     <label class="check"><input id="qson" type="checkbox" checked> 停筆拉成直線</label>
+    <div class="row">
+      <button id="tipimp" title="匯入一張圖當筆尖，例如 remove-bg 切出來的素材">匯入筆尖</button>
+      <button id="tipclr" class="icon" aria-label="清除筆尖" title="清除筆尖" disabled>✕</button>
+    </div>
+    <label class="check"><input id="tipraw" type="checkbox"> 筆尖保留原色</label>
+    <input id="tipf" type="file" accept="image/*" hidden>
   </section>
 
   <section class="grp">
@@ -178,7 +184,9 @@
   </section>
 </aside>
 <script>
-const W = 1200, H = 800;
+const W = 1200, H = 1600;
+// 圖層縮圖：跟著畫布比例走，否則直向畫布會被壓扁
+const TW = 36, TH = 48;
 const $ = id => document.getElementById(id);
 const wrap = $('wrap');
 let layers = [], cur = null, eraser = false, n = 0, undos = [], redos = [];
@@ -232,7 +240,7 @@ function rotateV(cx, cy, da) {
   v.x = x + dx * c - dy * s; v.y = y + dx * s + dy * c; v.r += da;
 }
 // --- 透視輔助線：地平線與消失點可拖曳（座標用畫布像素），畫在 stage 上方的獨立覆蓋層 ---
-const guide = { mode: 0, hy: 400, v1: 250, v2: 1000, v3x: 600, v3y: 2600 };
+const guide = { mode: 0, hy: 800, v1: 250, v2: 1000, v3x: 600, v3y: 3200 };
 // 兩層覆蓋畫布：輔助線／變形外框一層，橡皮擦游標一層。
 // 游標只是跟著筆移動，不該連同最多 144 條透視線一起重畫。
 const overlay = () => {
@@ -350,7 +358,7 @@ function sync(...dirty) {
   wrap.append(tmp, pred); // 暫存層與預測層永遠在最上面
   list(...dirty);
 }
-// 縮圖畫布依圖層快取重用：每次 list() 都重建的話，等於每一筆結束都把每層 1200×800 重縮一次。
+// 縮圖畫布依圖層快取重用：每次 list() 都重建的話，等於每一筆結束都把每層整張重縮一次。
 // 傳入的圖層才會重畫縮圖，其餘沿用快取（呼叫端負責在像素變動時把自己傳進來）。
 const thumbs = new Map();
 // 匯入底圖的 ImageBitmap 佔用的是 GPU/CPU 記憶體，換掉時要明確釋放
@@ -363,8 +371,8 @@ function list(...dirty) {
     const row = document.createElement('div');
     row.className = 'layer' + (l === cur ? ' sel' : '');
     let th = thumbs.get(l);
-    if (!th) { th = Object.assign(document.createElement('canvas'), { width: 40, height: 27 }); thumbs.set(l, th); d.add(l); }
-    if (d.has(l)) { const tc = th.getContext('2d'); tc.clearRect(0, 0, 40, 27); tc.drawImage(l.c, 0, 0, 40, 27); }
+    if (!th) { th = Object.assign(document.createElement('canvas'), { width: TW, height: TH }); thumbs.set(l, th); d.add(l); }
+    if (d.has(l)) { const tc = th.getContext('2d'); tc.clearRect(0, 0, TW, TH); tc.drawImage(l.c, 0, 0, TW, TH); }
     const eye = document.createElement('button'); eye.textContent = l.visible ? '顯示' : '隱藏'; eye.setAttribute('aria-pressed', l.visible);
     eye.disabled = !!stop3d;
     eye.onclick = e => { e.stopPropagation(); l.visible = !l.visible; l.c.style.display = l.visible ? '' : 'none'; list(); };
@@ -442,10 +450,42 @@ const grainPat = col => {
   return gPat;
 };
 
+// --- 自訂筆尖：把一張圖當印章蓋（例如 remove-bg 切出來的素材 PNG）---
+// 正規化到 TIP 見方（保持長寬比、置中），可選用目前顏色著色；依 (是否保留原色, 顏色) 快取
+const TIP = 256;
+let tipImg = null, tipCv = null, tipKey = null;
+function tipOf(col) {
+  const raw = $('tipraw').checked ? 'r' : 'c', key = raw + col;
+  if (key === tipKey && tipCv) return tipCv;
+  const c = Object.assign(document.createElement('canvas'), { width: TIP, height: TIP }), x = c.getContext('2d');
+  const k = Math.min(TIP / tipImg.width, TIP / tipImg.height), w = tipImg.width * k, h = tipImg.height * k;
+  x.drawImage(tipImg, (TIP - w) / 2, (TIP - h) / 2, w, h);
+  if (raw === 'c') { x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, TIP, TIP); }
+  tipCv = c; tipKey = key;
+  return c;
+}
+function setTip(img, name) {
+  if (tipImg?.close) tipImg.close();
+  tipImg = img; tipCv = tipKey = null;
+  $('tipimp').textContent = img ? '筆尖：' + name.slice(0, 12) : '匯入筆尖';
+  $('tipimp').classList.toggle('on', !!img);
+  $('tipclr').disabled = !img;
+}
+$('tipimp').onclick = () => $('tipf').click();
+$('tipclr').onclick = () => setTip(null, '');
+$('tipraw').onchange = () => { tipCv = tipKey = null; };
+$('tipf').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const img = await createImageBitmap(f).catch(() => null);
+  if (!img) return alert('無法讀取這個圖片');
+  setTip(img, f.name);
+};
+
 let rest = 0;
 // col 由 draw() 一次讀進來：input[type=color].value 每讀一次都要做值正規化，不該每顆筆印讀
 function stamp(c, col, x, y, r, a) {
   c.globalAlpha = a;
+  if (tipImg) { c.drawImage(tipOf(col), x - r, y - r, r * 2, r * 2); return; } // 筆尖圖自帶紋理，蓋過 B.grain／B.hard
   if (B.grain) c.fillStyle = grainPat(col);
   else if (B.hard < 1) { const g = c.createRadialGradient(x, y, r * B.hard, x, y, r); g.addColorStop(0, col); g.addColorStop(1, col + '00'); c.fillStyle = g; }
   else c.fillStyle = col;
@@ -625,7 +665,7 @@ addEventListener('keydown', e => { if (e.code === 'Space') { space = true; e.pre
 addEventListener('keyup', e => { if (e.code === 'Space') space = false; });
 
 // --- 復原 / 重做 ---
-// 以「總位元組」而非筆數為上限：一張 1200×800 的快照就是 3.84 MB，30 張會吃掉上百 MB。
+// 以「總位元組」而非筆數為上限：一張 1200×1600 的快照就是 7.68 MB，30 張會吃掉兩百多 MB。
 // 變形用整張快照，所以位元組上限比筆數上限更貼近實際記憶體。
 const UNDO_MAX_BYTES = 64 * 1024 * 1024;
 const undoBytes = e => e.c.width * e.c.height * 4;
@@ -705,7 +745,7 @@ function endTf() {
   if (!tf) return;
   const { L, m, before } = tf;
   if (L.img) L.tf = m;
-  // 只存「變形前後有差異的聯集」範圍：整張 1200×800 是 3.84 MB，鉛筆稿通常只佔一角。
+  // 只存「變形前後有差異的聯集」範圍：整張 1200×1600 是 7.68 MB，鉛筆稿通常只佔一角。
   // 兩張都是空的就不必進復原堆疊（等於沒改到東西）。
   const box = unionBox(alphaBox(before), alphaBox(L.c));
   if (box) pushUndo({ l: L, c: crop(before, box.x, box.y, box.w, box.h), x: box.x, y: box.y });
