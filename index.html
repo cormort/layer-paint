@@ -4,69 +4,158 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Paint</title>
 <style>
-  body{margin:0;display:flex;height:100vh;font:14px system-ui;background:#2a2a2e;color:#eee;overflow:hidden;touch-action:none;user-select:none}
-  #stage{flex:1;position:relative;overflow:hidden;touch-action:none}
-  #wrap{position:absolute;left:0;top:0;width:1200px;height:800px;transform-origin:0 0;box-shadow:0 0 20px #000;cursor:crosshair;
-    background:conic-gradient(#ccc 25%,#fff 0 50%,#ccc 0 75%,#fff 0) 0 0/20px 20px}
+  /* 石墨桌面＋非照相藍（素描打底用的淡藍鉛筆）作為唯一強調色 */
+  :root{
+    --desk:#3b3d42; --panel:#232428; --field:#2e3035; --line:#41444a;
+    --ink:#e9e7e2; --muted:#9c9a94; --blue:#93d3e8; --blue-ink:#0e2a35;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;display:flex;height:100vh;height:100dvh;font:14px/1.4 -apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif;
+    background:var(--panel);color:var(--ink);overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+  #stage{flex:1;position:relative;overflow:hidden;touch-action:none;
+    background:radial-gradient(120% 90% at 50% 40%,#45484e 0%,var(--desk) 55%,#2f3135 100%)}
+  #wrap{position:absolute;left:0;top:0;width:1200px;height:800px;transform-origin:0 0;cursor:crosshair;
+    box-shadow:0 1px 2px rgba(0,0,0,.35),0 18px 50px rgba(0,0,0,.45);
+    background:conic-gradient(#d9d9d9 25%,#fff 0 50%,#d9d9d9 0 75%,#fff 0) 0 0/20px 20px}
   #wrap canvas{position:absolute;inset:0;width:100%;height:100%}
-  aside{width:230px;padding:10px;background:#1c1c1f;overflow:auto;display:flex;flex-direction:column;gap:8px}
-  label{display:flex;align-items:center;gap:6px}
-  label input[type=range]{flex:1}
-  button{background:#3a3a40;color:#eee;border:0;border-radius:6px;padding:6px 8px;cursor:pointer}
-  button.on{background:#4a7cff}
-  .row{display:flex;gap:4px;flex-wrap:wrap}
-  #m3 .row{gap:6px}#m3 .row label{white-space:nowrap}#m3 input[type=range]{flex:none;width:80px}#m3 .row>span{font-size:12px}
-  .layer{display:flex;align-items:center;gap:6px;padding:6px;border-radius:6px;background:#2a2a2e;cursor:pointer}
-  .layer.sel{outline:2px solid #4a7cff}
-  .layer canvas{width:40px;height:27px;background:#fff;border-radius:3px}
+
+  aside{width:252px;flex:none;padding:14px 14px 18px;background:var(--panel);border-left:1px solid #1a1b1e;
+    overflow-y:auto;touch-action:pan-y;display:flex;flex-direction:column;gap:16px}
+  .grp{display:flex;flex-direction:column;gap:10px}
+  .grp+.grp{padding-top:16px;border-top:1px solid var(--line)}
+  .grp h2{margin:0;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em}
+
+  button{font:inherit;font-size:13px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:8px;
+    min-height:34px;padding:0 11px;cursor:pointer;white-space:nowrap;transition:background-color .12s,border-color .12s}
+  button:hover{border-color:#5a5e66}
+  button:active{background:#383b41}
+  button.on{background:var(--blue);border-color:var(--blue);color:var(--blue-ink);font-weight:600}
+  button:disabled{opacity:.38;cursor:default}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  .row{display:flex;gap:6px;flex-wrap:wrap}
+  .row>button{flex:1 1 auto}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:3px;background:var(--field);border:1px solid var(--line);border-radius:10px}
+  .seg button{border:0;background:transparent;min-height:32px;padding:0}
+  .seg button.on{background:var(--blue)}
+  .icon{flex:0 0 40px!important;padding:0;font-size:16px}
+
+  label{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+  label>input[type=range]{flex:1;min-width:0}
+  label.check{color:var(--ink)}
+  input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--blue)}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;height:28px;margin:0;background:transparent}
+  input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--line)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;margin-top:-8px;border-radius:50%;
+    background:var(--ink);border:3px solid var(--panel);box-shadow:0 0 0 1px #5a5e66}
+  input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--line)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:3px solid var(--panel)}
+
+  select{font:inherit;font-size:13px;color:var(--ink);min-height:34px;padding:0 30px 0 10px;border-radius:8px;border:1px solid var(--line);
+    -webkit-appearance:none;appearance:none;flex:1;
+    background:var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239c9a94' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 11px center}
+  input[type=color]{-webkit-appearance:none;appearance:none;width:34px;height:34px;padding:0;border:0;border-radius:50%;background:none;cursor:pointer;
+    box-shadow:0 0 0 2px var(--panel),0 0 0 4px #7d8189}
+  input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+  input[type=color]::-webkit-color-swatch{border:0;border-radius:50%}
+  input[type=color]::-moz-color-swatch{border:0;border-radius:50%}
+  .brushline{display:flex;gap:10px;align-items:center}
+
+  #tfbar{padding:12px;border-radius:10px;background:rgba(147,211,232,.07);border:1px solid rgba(147,211,232,.45)}
+  .hint{font-size:12px;color:var(--muted)}
+
+  #list{display:flex;flex-direction:column;gap:2px}
+  .layer{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+  .layer:hover{background:var(--field)}
+  .layer.sel{background:var(--field);border-color:var(--line);box-shadow:inset 3px 0 0 var(--blue)}
+  .layer canvas{width:54px;height:36px;flex:none;background:#fff;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
   .layer span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .layer button{border:0;background:transparent;min-height:30px;padding:0 6px;opacity:.75}
+  .layer button:hover{opacity:1}
+  #save{min-height:40px}
+
+  #m3{display:none;position:fixed;inset:0 252px 0 0;z-index:9;background:#1d1e21;flex-direction:column}
+  #m3 .bar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:nowrap;overflow-x:auto;touch-action:pan-x;
+    background:var(--panel);border-bottom:1px solid #1a1b1e;scrollbar-width:none}
+  #m3 .bar::-webkit-scrollbar{display:none}
+  #m3 .bar label{white-space:nowrap}
+  #m3 .bar input[type=range]{width:90px;flex:none}
+  #m3 .bar select{flex:none}
+  #m3 .sep{flex:none;width:1px;align-self:stretch;margin:2px 4px;background:var(--line)}
+  #poses{display:flex;gap:6px}
+  #m3c{flex:1;min-height:0;touch-action:none}
+  @media (prefers-reduced-motion:reduce){button{transition:none}}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
-<div id="m3" style="display:none;position:fixed;inset:0 230px 0 0;z-index:9;background:#15151a;flex-direction:column">
-  <div class="row" style="padding:8px;align-items:center">
-    <button id="m3x">✕ 關閉</button>
+<div id="m3">
+  <div class="bar">
+    <button id="m3x">關閉</button>
+    <span class="sep"></span>
+    <button id="m3mode" class="on">模式：畫圖</button>
+    <span class="sep"></span>
     <label>厚度 <input id="depth" type="range" min="2" max="300" value="30"></label>
     <label>層距 <input id="gap" type="range" min="0" max="300" value="60"></label>
     <label>精細度 <select id="res"><option value="12">低</option><option value="8" selected>中</option><option value="5">高</option></select></label>
-    <button id="m3mode" class="on">✏️ 畫圖中</button>
-    <button id="m3spring">🔓 自由檢視</button><button id="m3home">↺ 回正</button><button id="m3lv">🔒 垂直鎖定</button><button id="m3lh">🔒 水平鎖定</button>
-    <button id="m3man" class="on">人偶 顯示</button><button id="m3reset">重置姿勢</button><button id="m3save">存成輔助線圖層</button><span id="poses" class="row"></span>
+    <span class="sep"></span>
+    <button id="m3spring">自動回正</button><button id="m3home">回正</button><button id="m3lv">鎖定俯仰</button><button id="m3lh">鎖定水平</button>
+    <span class="sep"></span>
+    <button id="m3man" class="on">人偶</button><span id="poses"></span><button id="m3reset">重置姿勢</button>
     <label>人偶大小 <input id="msize" type="range" min="30" max="150" value="100"></label>
-    <span style="opacity:.6">模式：畫圖→旋轉→擺姿勢</span>
+    <span class="sep"></span>
+    <button id="m3save">存成輔助線圖層</button>
   </div>
-  <div id="m3c" style="flex:1;min-height:0"></div>
+  <div id="m3c"></div>
 </div>
 <div id="stage"><div id="wrap"></div></div>
 <aside>
-  <div class="row">
-    <button id="brush" class="on">筆刷</button><button id="eraser">橡皮擦</button><button id="tfm">變形</button><button id="pick">滴管</button>
-    <button id="undo">↶</button><button id="redo">↷</button><button id="fit">適合畫面</button>
-  </div>
-  <div id="tfbar" style="display:none;flex-direction:column;gap:6px;padding:8px;border-radius:6px;background:#2a2a40">
-    <label>縮放 <input id="tfs" type="range" min="5" max="400" value="100"></label>
-    <label>旋轉 <input id="tfr" type="range" min="-180" max="180" value="0"></label>
-    <div class="row"><button id="tfflip">水平翻轉</button><button id="tfreset">重置</button><button id="tfok" class="on">完成</button></div>
-    <span style="font-size:12px;opacity:.6">拖曳移動；兩指捏合縮放＋旋轉</span>
-  </div>
-  <select id="bsel" style="padding:6px;border-radius:6px;background:#3a3a40;color:#eee;border:0"></select>
-  <label>顏色 <input id="color" type="color" value="#222222"></label>
-  <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
-  <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
-  <label><input id="qson" type="checkbox" checked> QuickShape（停筆拉直線）</label>
-  <label>輔助線 <select id="gmode" style="flex:1;padding:6px;border-radius:6px;background:#3a3a40;color:#eee;border:0">
-    <option value="0">關</option><option value="1">1 點透視</option><option value="2">2 點透視</option><option value="3">3 點透視</option></select></label>
-  <label>線數 <input id="gn" type="range" min="4" max="48" value="16"></label>
-  <button id="gbake">輔助線存成圖層</button>
-  <hr style="width:100%;border-color:#333">
-  <div class="row">
-    <button id="add">＋圖層</button><button id="del">刪除</button>
-    <button id="up">▲</button><button id="down">▼</button>
-    <button id="merge">向下合併</button><button id="d3">3D 柱體</button>
-    <button id="imp">匯入底圖</button><input id="impf" type="file" accept="image/*" hidden>
-  </div>
-  <label>圖層透明度 <input id="lalpha" type="range" min="0" max="100" value="100"></label>
-  <div id="list" style="display:flex;flex-direction:column;gap:4px"></div>
-  <button id="save">匯出 PNG</button>
+  <section class="grp">
+    <div class="seg">
+      <button id="brush" class="on">筆刷</button><button id="eraser">橡皮擦</button><button id="tfm">變形</button><button id="pick">滴管</button>
+    </div>
+    <div class="row">
+      <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button><button id="fit">適合畫面</button>
+    </div>
+    <div id="tfbar" style="display:none;flex-direction:column;gap:8px">
+      <label>縮放 <input id="tfs" type="range" min="5" max="400" value="100"></label>
+      <label>旋轉 <input id="tfr" type="range" min="-180" max="180" value="0"></label>
+      <div class="row"><button id="tfflip">水平翻轉</button><button id="tfreset">重置</button><button id="tfok" class="on">完成</button></div>
+      <span class="hint">拖曳移動，兩指捏合可縮放與旋轉</span>
+    </div>
+  </section>
+
+  <section class="grp">
+    <h2>筆刷</h2>
+    <div class="brushline"><select id="bsel" aria-label="筆刷"></select><input id="color" type="color" value="#222222" aria-label="顏色"></div>
+    <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
+    <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
+    <label class="check"><input id="qson" type="checkbox" checked> 停筆拉成直線</label>
+  </section>
+
+  <section class="grp">
+    <h2>透視輔助線</h2>
+    <select id="gmode" aria-label="透視輔助線">
+      <option value="0">關閉</option><option value="1">1 點透視</option><option value="2">2 點透視</option><option value="3">3 點透視</option></select>
+    <label>線數 <input id="gn" type="range" min="4" max="48" value="16"></label>
+    <button id="gbake">存成圖層</button>
+  </section>
+
+  <section class="grp">
+    <h2>圖層</h2>
+    <div class="row">
+      <button id="add">新增</button><button id="imp">匯入底圖</button><button id="del">刪除</button>
+    </div>
+    <div class="row">
+      <button id="up" class="icon" aria-label="上移">▲</button><button id="down" class="icon" aria-label="下移">▼</button><button id="merge">向下合併</button>
+    </div>
+    <input id="impf" type="file" accept="image/*" hidden>
+    <label>透明度 <input id="lalpha" type="range" min="0" max="100" value="100"></label>
+    <div id="list"></div>
+  </section>
+
+  <section class="grp">
+    <button id="d3">3D 檢視</button>
+    <button id="save">匯出 PNG</button>
+  </section>
 </aside>
 <script>
 const W = 1200, H = 800;
@@ -185,7 +274,7 @@ function list() {
     d.className = 'layer' + (l === cur ? ' sel' : '');
     const th = document.createElement('canvas'); th.width = 40; th.height = 27;
     th.getContext('2d').drawImage(l.c, 0, 0, 40, 27);
-    const eye = document.createElement('button'); eye.textContent = l.visible ? '👁' : '—';
+    const eye = document.createElement('button'); eye.textContent = l.visible ? '顯示' : '隱藏'; eye.setAttribute('aria-pressed', l.visible);
     eye.disabled = !!stop3d;
     eye.onclick = e => { e.stopPropagation(); l.visible = !l.visible; l.c.style.display = l.visible ? '' : 'none'; list(); };
     const nm = document.createElement('span'); nm.textContent = l.name; nm.title = '雙擊重新命名';
@@ -507,6 +596,7 @@ async function open3d() {
   let ls = mkLs();
   const sc = Object.assign(document.createElement('canvas'), { width: W, height: H }), sx = sc.getContext('2d', { willReadFrequently: true });
   const renderer = new T.WebGLRenderer({ antialias: true });
+  renderer.setClearColor(0x2b2d31); // 跟介面的石墨色一致
   const scene = new T.Scene(), cam = new T.PerspectiveCamera(40, 1, 10, 10000);
   cam.position.set(0, -300, 1600);
   scene.add(new T.AmbientLight(0xffffff, 1.2));
@@ -539,11 +629,11 @@ async function open3d() {
   ctl.addEventListener('start', () => cancelAnimationFrame(anim));
   ctl.addEventListener('end', () => { if (spring) recenter(false); });
   const tog = (id, on, a, b) => { $(id).textContent = on ? a : b; $(id).classList.toggle('on', on); };
-  tog('m3spring', false, '', '🔓 自由檢視'); tog('m3lv', false, '', '🔒 垂直鎖定'); tog('m3lh', false, '', '🔒 水平鎖定');
-  $('m3spring').onclick = () => { spring = !spring; tog('m3spring', spring, '🧲 自動回正: 開', '🔓 自由檢視'); if (spring) recenter(false); };
+  tog('m3spring', false, '', '自動回正'); tog('m3lv', false, '', '鎖定俯仰'); tog('m3lh', false, '', '鎖定水平');
+  $('m3spring').onclick = () => { spring = !spring; tog('m3spring', spring, '自動回正', '自動回正'); if (spring) recenter(false); };
   $('m3home').onclick = () => recenter();
-  $('m3lv').onclick = () => { lockV = !lockV; tog('m3lv', lockV, '🔒 垂直鎖定中', '🔒 垂直鎖定'); setLocks(); };
-  $('m3lh').onclick = () => { lockH = !lockH; tog('m3lh', lockH, '🔒 水平鎖定中', '🔒 水平鎖定'); setLocks(); };
+  $('m3lv').onclick = () => { lockV = !lockV; tog('m3lv', lockV, '鎖定俯仰', '鎖定俯仰'); setLocks(); };
+  $('m3lh').onclick = () => { lockH = !lockH; tog('m3lh', lockH, '鎖定水平', '鎖定水平'); setLocks(); };
   const geo = new T.BoxGeometry(1, 1, 1), mat = new T.MeshStandardMaterial();
   // --- 人偶 ---
   const man = new T.Group(); scene.add(man);
@@ -568,8 +658,8 @@ async function open3d() {
   });
   const setSize = () => man.scale.setScalar($('msize').value / 100);
   $('msize').oninput = setSize; setSize();
-  tog('m3man', true, '人偶 顯示', '');
-  $('m3man').onclick = () => { man.visible = !man.visible; $('m3man').textContent = man.visible ? '人偶 顯示' : '人偶 隱藏'; $('m3man').classList.toggle('on', man.visible); };
+  tog('m3man', true, '人偶', '');
+  $('m3man').onclick = () => { man.visible = !man.visible; $('m3man').classList.toggle('on', man.visible); };
   $('m3reset').onclick = () => J.forEach((j, i) => j.pos.fromArray(home[i]));
   let grab = null;
 
@@ -663,10 +753,10 @@ async function open3d() {
     return ray.ray.intersectPlane(plane, hit) ? [hit.x + W / 2, H / 2 - hit.y] : null;
   };
   let mode = 0; // 0 畫圖 1 旋轉 2 擺姿勢
-  tog('m3mode', true, '✏️ 畫圖中', '');
+  tog('m3mode', true, '模式：畫圖', '');
   $('m3mode').onclick = () => {
     mode = (mode + 1) % 3;
-    $('m3mode').textContent = ['✏️ 畫圖中', '🔄 旋轉中', '🕴 擺姿勢中'][mode]; $('m3mode').classList.toggle('on', mode !== 1);
+    $('m3mode').textContent = ['模式：畫圖', '模式：旋轉', '模式：擺姿勢'][mode]; $('m3mode').classList.toggle('on', mode !== 1);
   };
   const dragPlane = new T.Plane(), P = new T.Vector3();
   const tp = new Set(); // 3D 視窗內按著的手指
