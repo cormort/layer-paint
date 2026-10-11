@@ -7,20 +7,37 @@
   /* 石墨桌面＋非照相藍（素描打底用的淡藍鉛筆）作為唯一強調色 */
   :root{
     --desk:#3b3d42; --panel:#232428; --field:#2e3035; --line:#41444a;
-    --ink:#e9e7e2; --muted:#9c9a94; --blue:#93d3e8; --blue-ink:#0e2a35;
+    --ink:#e9e7e2; --muted:#9c9a94; --blue:#93d3e8; --blue-ink:#0e2a35; --aside:252px;
   }
   *{box-sizing:border-box}
-  body{margin:0;display:flex;height:100vh;height:100dvh;font:14px/1.4 -apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif;
-    background:var(--panel);color:var(--ink);overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
-  #stage{flex:1;position:relative;overflow:hidden;touch-action:none;
+  /* 面板收合：面板改成浮在畫布上的覆蓋層，收起來就整條讓給畫布 */
+  body.hideui{--aside:0px}
+  body.hideui aside{display:none}
+  body{margin:0;position:relative;display:flex;height:100vh;height:100dvh;font:14px/1.4 -apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif;
+    background:var(--panel);color:var(--ink);overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;
+    /* iOS：不跳長按選單／放大鏡，也不做橡皮筋回彈 */
+    -webkit-touch-callout:none;-webkit-user-drag:none;overscroll-behavior:none}
+  #stage{flex:1;position:relative;overflow:hidden;touch-action:none;overscroll-behavior:none;
     background:radial-gradient(120% 90% at 50% 40%,#45484e 0%,var(--desk) 55%,#2f3135 100%)}
   #wrap{position:absolute;left:0;top:0;width:1200px;height:800px;transform-origin:0 0;cursor:crosshair;
     box-shadow:0 1px 2px rgba(0,0,0,.35),0 18px 50px rgba(0,0,0,.45);
     background:conic-gradient(#d9d9d9 25%,#fff 0 50%,#d9d9d9 0 75%,#fff 0) 0 0/20px 20px}
-  #wrap canvas{position:absolute;inset:0;width:100%;height:100%}
+  /* 讓命中測試直接落在 stage，不必穿過每張圖層畫布 */
+  #wrap canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  #uitog{position:absolute;top:10px;right:calc(var(--aside) + 10px);z-index:11;min-height:36px;padding:0 12px;
+    background:rgba(35,36,40,.82);border-color:#5a5e66;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 
-  aside{width:252px;flex:none;padding:14px 14px 18px;background:var(--panel);border-left:1px solid #1a1b1e;
+  /* 工具區浮在畫布上：預設半透明，畫布從底下透出來；滑過或用鍵盤／手指進到面板裡的控件時
+     才完全不透明。alpha 0.72 是量出來的折衷——再低的話面板壓在白紙上，次要文字對比會掉到
+     3:1 以下。刻意不加 backdrop-filter：畫圖時畫布每一帧都在變，面板就得跟著每一帧重新模糊。 */
+  aside{position:absolute;right:0;top:0;bottom:0;z-index:10;
+    width:var(--aside);padding:14px 14px 18px;
+    background:rgba(35,36,40,.72);--muted:#c4c2bc; /* 半透明時次要文字要提亮，否則在白紙上看不見 */
+    border-left:1px solid rgba(65,68,74,.65);box-shadow:-10px 0 28px rgba(0,0,0,.32);
+    transition:background-color .18s ease;
     overflow-y:auto;touch-action:pan-y;display:flex;flex-direction:column;gap:16px}
+  aside:hover,aside:focus-within{background:var(--panel);--muted:#9c9a94}
   .grp{display:flex;flex-direction:column;gap:10px}
   .grp+.grp{padding-top:16px;border-top:1px solid var(--line)}
   .grp h2{margin:0;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em}
@@ -74,7 +91,7 @@
   .layer button:hover{opacity:1}
   #save{min-height:40px}
 
-  #m3{display:none;position:fixed;inset:0 252px 0 0;z-index:9;background:#1d1e21;flex-direction:column}
+  #m3{display:none;position:fixed;inset:0;z-index:9;background:#1d1e21;flex-direction:column}
   #m3 .bar{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:nowrap;overflow-x:auto;touch-action:pan-x;
     background:var(--panel);border-bottom:1px solid #1a1b1e;scrollbar-width:none}
   #m3 .bar::-webkit-scrollbar{display:none}
@@ -84,7 +101,7 @@
   #m3 .sep{flex:none;width:1px;align-self:stretch;margin:2px 4px;background:var(--line)}
   #poses{display:flex;gap:6px}
   #m3c{flex:1;min-height:0;touch-action:none}
-  @media (prefers-reduced-motion:reduce){button{transition:none}}
+  @media (prefers-reduced-motion:reduce){button,aside{transition:none}}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <div id="m3">
@@ -106,7 +123,7 @@
   </div>
   <div id="m3c"></div>
 </div>
-<div id="stage"><div id="wrap"></div></div>
+<div id="stage"><button id="uitog" title="收合面板" aria-label="收合面板"></button><div id="wrap"></div></div>
 <aside>
   <section class="grp">
     <div class="seg">
@@ -170,35 +187,64 @@ let eCur = null; // 橡皮擦範圍圈：[clientX, clientY, 畫布半徑]
 const tmp = Object.assign(document.createElement('canvas'), { width: W, height: H });
 tmp.style.pointerEvents = 'none';
 const tctx = tmp.getContext('2d');
+// 預測筆跡層：疊在 tmp 之上，只在落筆期間顯示（見 drawPred）
+const pred = Object.assign(document.createElement('canvas'), { width: W, height: H });
+pred.style.cssText = 'pointer-events:none;display:none';
+const pctx = pred.getContext('2d');
 
 const stage = $('stage'), v = { x: 0, y: 0, s: 1, r: 0 };
+// stage 的位置與尺寸只在版面變動時才會改；快取起來，否則每個 coalesced pointer event 都要
+// 讀一次 getBoundingClientRect／clientWidth，等於一帧強制同步 layout 幾十次
+let sRect = null, sW = 0, sH = 0;
+const stageRect = () => {
+  if (!sRect) { sRect = stage.getBoundingClientRect(); sW = stage.clientWidth; sH = stage.clientHeight; }
+  return sRect;
+};
+const stageSize = () => { stageRect(); return [sW, sH]; }; // 只在 stageRect() 驗證過後才讀 sW/sH
+addEventListener('resize', () => { sRect = null; });
+addEventListener('scroll', () => { sRect = null; }, true);
 const apply = () => { wrap.style.transform = `translate(${v.x}px,${v.y}px) rotate(${v.r}rad) scale(${v.s})`; drawGuide(); };
 // 畫布座標 ↔ stage 座標（含旋轉），不能再用 getBoundingClientRect 推算
 const toStage = (x, y) => { const c = Math.cos(v.r), s = Math.sin(v.r); return [v.x + (x * c - y * s) * v.s, v.y + (x * s + y * c) * v.s]; };
 const toCanvas = (cx, cy) => {
-  const r = stage.getBoundingClientRect(), x = cx - r.left - v.x, y = cy - r.top - v.y, c = Math.cos(v.r), s = Math.sin(v.r);
+  const r = stageRect(), x = cx - r.left - v.x, y = cy - r.top - v.y, c = Math.cos(v.r), s = Math.sin(v.r);
   return [(x * c + y * s) / v.s, (-x * s + y * c) / v.s];
 };
 function fit() {
   const w = stage.clientWidth, h = stage.clientHeight;
-  v.s = Math.min((w - 40) / W, (h - 40) / H, 1); v.r = 0;
+  // 上限 2 而不是 1：大螢幕（12.9" 橫放）光靠「不放大超過 1:1」會白白浪費一成畫面
+  v.s = Math.min((w - 32) / W, (h - 32) / H, 2); v.r = 0;
   v.x = (w - W * v.s) / 2; v.y = (h - H * v.s) / 2; apply();
 }
-// 以螢幕點 (cx,cy) 為中心縮放
-function zoomAt(cx, cy, k) {
-  const r = stage.getBoundingClientRect(), x = cx - r.left, y = cy - r.top;
+// 以螢幕點 (cx,cy) 為中心縮放。只改 v，不重畫：兩指手勢一次事件會依序縮放、旋轉、平移，
+// 每次都 apply() 的話等於把最貴的輔助線重畫做三遍。呼叫端負責收尾 apply()。
+function zoomV(cx, cy, k) {
+  const r = stageRect(), x = cx - r.left, y = cy - r.top;
   const s = Math.min(16, Math.max(0.02, v.s * k)); k = s / v.s;
-  v.x = x - (x - v.x) * k; v.y = y - (y - v.y) * k; v.s = s; apply();
+  v.x = x - (x - v.x) * k; v.y = y - (y - v.y) * k; v.s = s;
 }
-// 以螢幕點 (cx,cy) 為中心旋轉畫布（Procreate 式兩指旋轉）
-function rotateAt(cx, cy, da) {
-  const r = stage.getBoundingClientRect(), x = cx - r.left, y = cy - r.top, c = Math.cos(da), s = Math.sin(da), dx = v.x - x, dy = v.y - y;
-  v.x = x + dx * c - dy * s; v.y = y + dx * s + dy * c; v.r += da; apply();
+// 以螢幕點 (cx,cy) 為中心旋轉畫布（Procreate 式兩指旋轉）。同樣只改 v。
+function rotateV(cx, cy, da) {
+  const r = stageRect(), x = cx - r.left, y = cy - r.top, c = Math.cos(da), s = Math.sin(da), dx = v.x - x, dy = v.y - y;
+  v.x = x + dx * c - dy * s; v.y = y + dx * s + dy * c; v.r += da;
 }
 // --- 透視輔助線：地平線與消失點可拖曳（座標用畫布像素），畫在 stage 上方的獨立覆蓋層 ---
 const guide = { mode: 0, hy: 400, v1: 250, v2: 1000, v3x: 600, v3y: 2600 };
-const gcv = Object.assign(document.createElement('canvas'), {}); gcv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
-stage.append(gcv);
+// 兩層覆蓋畫布：輔助線／變形外框一層，橡皮擦游標一層。
+// 游標只是跟著筆移動，不該連同最多 144 條透視線一起重畫。
+const overlay = () => {
+  const c = document.createElement('canvas');
+  c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+  stage.append(c); return c;
+};
+const gcv = overlay(), ecv = overlay();
+// 依 DPR 配置覆蓋層；尺寸沒變就只清空
+function prep(cv) {
+  const d = devicePixelRatio || 1, [w, h] = stageSize(), bw = Math.round(w * d), bh = Math.round(h * d), c = cv.getContext('2d');
+  if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+  else { c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, bw, bh); }
+  return [c, d];
+}
 const gHandles = () => {
   const h = [{ id: 'hy', x: 40, y: guide.hy }, { id: 'v1', x: guide.v1, y: guide.hy }];
   if (guide.mode > 1) h.push({ id: 'v2', x: guide.v2, y: guide.hy });
@@ -217,50 +263,76 @@ function guideLines(ctx, lw) {
   ctx.globalAlpha = 1;
 }
 function drawGuide() {
-  const d = devicePixelRatio || 1, w = stage.clientWidth, h = stage.clientHeight, c = gcv.getContext('2d');
-  const bw = Math.round(w * d), bh = Math.round(h * d);
-  if (gcv.width !== bw || gcv.height !== bh) { gcv.width = bw; gcv.height = bh; } // 只在尺寸變了才重新配置
-  else { c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, bw, bh); }
-  const cs = Math.cos(v.r) * v.s * d, sn = Math.sin(v.r) * v.s * d, inCanvas = () => c.setTransform(cs, sn, -sn, cs, d * v.x, d * v.y);
-  if (guide.mode) {
-    c.save(); inCanvas();
-    c.beginPath(); c.rect(0, 0, W, H); c.clip();
-    guideLines(c, 1.2 / v.s);
-    c.restore();
-    inCanvas(); c.strokeStyle = '#fc0'; c.setLineDash([8 / v.s, 6 / v.s]); c.lineWidth = 1.5 / v.s;
-    c.beginPath(); c.moveTo(-20000, guide.hy); c.lineTo(20000, guide.hy); c.stroke(); c.setLineDash([]);
-    c.setTransform(d, 0, 0, d, 0, 0);
-    gHandles().forEach(p => { c.beginPath(); c.arc(...toStage(p.x, p.y), 9, 0, 6.283); c.fillStyle = { hy: '#fc0', v1: '#e33', v2: '#2a2', v3: '#36f' }[p.id]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke(); });
+  // 沒有輔助線也沒有變形外框時整層收起來：少一個全螢幕合成層，iPad 上每一帧都省
+  const active = !!(guide.mode || tf);
+  gcv.style.display = active ? '' : 'none';
+  if (active) {
+    const [c, d] = prep(gcv);
+    const cs = Math.cos(v.r) * v.s * d, sn = Math.sin(v.r) * v.s * d, inCanvas = () => c.setTransform(cs, sn, -sn, cs, d * v.x, d * v.y);
+    if (guide.mode) {
+      c.save(); inCanvas();
+      c.beginPath(); c.rect(0, 0, W, H); c.clip();
+      guideLines(c, 1.2 / v.s);
+      c.restore();
+      inCanvas(); c.strokeStyle = '#fc0'; c.setLineDash([8 / v.s, 6 / v.s]); c.lineWidth = 1.5 / v.s;
+      c.beginPath(); c.moveTo(-20000, guide.hy); c.lineTo(20000, guide.hy); c.stroke(); c.setLineDash([]);
+      c.setTransform(d, 0, 0, d, 0, 0);
+      gHandles().forEach(p => { c.beginPath(); c.arc(...toStage(p.x, p.y), 9, 0, 6.283); c.fillStyle = { hy: '#fc0', v1: '#e33', v2: '#2a2', v3: '#36f' }[p.id]; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke(); });
+    }
+    if (tf) { // 變形中的外框
+      const { m, src } = tf, hw = src.width / 2, hh = src.height / 2, cr = Math.cos(m.r), sr = Math.sin(m.r);
+      const pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([a, b]) => toStage(W / 2 + m.x + (a * m.s * m.fx * cr - b * m.s * sr), H / 2 + m.y + (a * m.s * m.fx * sr + b * m.s * cr)));
+      c.setTransform(d, 0, 0, d, 0, 0); c.strokeStyle = '#4a7cff'; c.lineWidth = 2; c.setLineDash([6, 4]);
+      c.beginPath(); pts.forEach(p => c.lineTo(...p)); c.closePath(); c.stroke(); c.setLineDash([]);
+    }
   }
-  if (eraser && eCur && !tf && !picking) { // 橡皮擦範圍圈：深淺兩圈，在白紙和深色筆跡上都看得到
-    const r = stage.getBoundingClientRect(), rad = Math.max(2, eCur[2] * v.s);
-    c.setTransform(d, 0, 0, d, 0, 0); c.lineWidth = 1;
-    c.beginPath(); c.arc(eCur[0] - r.left, eCur[1] - r.top, rad, 0, 6.283); c.strokeStyle = 'rgba(0,0,0,.65)'; c.stroke();
-    c.beginPath(); c.arc(eCur[0] - r.left, eCur[1] - r.top, rad + 1, 0, 6.283); c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke();
-  }
-  if (tf) { // 變形中的外框
-    const { m, src } = tf, hw = src.width / 2, hh = src.height / 2, cr = Math.cos(m.r), sr = Math.sin(m.r);
-    const pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([a, b]) => toStage(W / 2 + m.x + (a * m.s * m.fx * cr - b * m.s * sr), H / 2 + m.y + (a * m.s * m.fx * sr + b * m.s * cr)));
-    c.setTransform(d, 0, 0, d, 0, 0); c.strokeStyle = '#4a7cff'; c.lineWidth = 2; c.setLineDash([6, 4]);
-    c.beginPath(); pts.forEach(p => c.lineTo(...p)); c.closePath(); c.stroke(); c.setLineDash([]);
-  }
+  drawECur();
+}
+// 橡皮擦範圍圈：深淺兩圈，在白紙和深色筆跡上都看得到；畫在自己的覆蓋層上
+function drawECur() {
+  const active = !!(eraser && eCur && !tf && !picking);
+  ecv.style.display = active ? '' : 'none'; // 沒在用就不留一個全螢幕合成層
+  if (!active) return;
+  const [c, d] = prep(ecv);
+  const r = stageRect(), rad = Math.max(2, eCur[2] * v.s);
+  c.setTransform(d, 0, 0, d, 0, 0); c.lineWidth = 1;
+  c.beginPath(); c.arc(eCur[0] - r.left, eCur[1] - r.top, rad, 0, 6.283); c.strokeStyle = 'rgba(0,0,0,.65)'; c.stroke();
+  c.beginPath(); c.arc(eCur[0] - r.left, eCur[1] - r.top, rad + 1, 0, 6.283); c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke();
 }
 $('gmode').onchange = e => { guide.mode = +e.target.value; drawGuide(); };
 $('gn').oninput = drawGuide;
 $('gbake').onclick = () => {
   if (!guide.mode) return;
   addLayer(); cur.name = '透視輔助線'; cur.guide = true;
-  guideLines(cur.ctx, 2); list();
+  guideLines(cur.ctx, 2); list(cur);
 };
 let gdrag = null;
 let sw = 0, sh = 0;
 // 視窗大小改變（iPad 旋轉、工具列伸縮）時只保持畫面中心，不重設使用者的縮放平移
 addEventListener('resize', () => { const w = stage.clientWidth, h = stage.clientHeight; v.x += (w - sw) / 2; v.y += (h - sh) / 2; sw = w; sh = h; apply(); });
+// 面板收合狀態要在第一次 fit() 之前套用，否則會先用面板展開的寬度算一次再重算
+const UI_HIDE = 'hideui';
+try { if (localStorage.getItem(UI_HIDE) === '1') document.body.classList.add(UI_HIDE); } catch {}
 fit(); sw = stage.clientWidth; sh = stage.clientHeight;
+const setUI = (hide, save) => {
+  document.body.classList.toggle(UI_HIDE, hide);
+  const b = $('uitog');
+  b.textContent = hide ? '▶ 面板' : '◀ 收合';
+  b.title = b.ariaLabel = hide ? '顯示面板' : '收合面板';
+  b.setAttribute('aria-expanded', String(!hide));
+  // 面板是浮動覆蓋層，開合不會改變 stage 尺寸，所以不需要重新 fit()，也不該弄丟使用者的縮放
+  if (save) { try { localStorage.setItem(UI_HIDE, hide ? '1' : '0'); } catch {} }
+};
+$('uitog').onclick = () => setUI(!document.body.classList.contains(UI_HIDE), true);
+setUI(document.body.classList.contains(UI_HIDE), false); // 讓按鈕文字與實際狀態一致
 stage.addEventListener('wheel', e => {
   e.preventDefault();
-  if (e.ctrlKey || e.metaKey) zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01)); // 觸控板捏合 / Ctrl+滾輪
-  else { v.x -= e.deltaX; v.y -= e.deltaY; apply(); }
+  if (e.ctrlKey || e.metaKey) { zoomV(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01)); apply(); } // 觸控板捏合 / Ctrl+滾輪
+  else {
+    // Firefox 的滾輪是「行」為單位，不換算的話一次只平移幾 px
+    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? stageSize()[1] : 1;
+    v.x -= e.deltaX * k; v.y -= e.deltaY * k; apply();
+  }
 }, { passive: false });
 
 function addLayer(fill) {
@@ -270,26 +342,34 @@ function addLayer(fill) {
   layers.splice(cur ? layers.indexOf(cur) + 1 : 0, 0, L);
   cur = L; sync();
 }
-function sync() {
+function sync(...dirty) {
   layers.forEach(l => wrap.append(l.c));
-  wrap.append(tmp); // 暫存層永遠在最上面
-  list();
+  wrap.append(tmp, pred); // 暫存層與預測層永遠在最上面
+  list(...dirty);
 }
-function list() {
+// 縮圖畫布依圖層快取重用：每次 list() 都重建的話，等於每一筆結束都把每層 1200×800 重縮一次。
+// 傳入的圖層才會重畫縮圖，其餘沿用快取（呼叫端負責在像素變動時把自己傳進來）。
+const thumbs = new Map();
+// 匯入底圖的 ImageBitmap 佔用的是 GPU/CPU 記憶體，換掉時要明確釋放
+const dropImg = L => { if (L && L.img) { L.img.close(); L.img = null; } };
+const forget = L => { thumbs.delete(L); dropImg(L); };
+function list(...dirty) {
+  const d = new Set(dirty);
   $('lalpha').value = (cur.c.style.opacity || 1) * 100;
   $('list').replaceChildren(...[...layers].reverse().map(l => {
-    const d = document.createElement('div');
-    d.className = 'layer' + (l === cur ? ' sel' : '');
-    const th = document.createElement('canvas'); th.width = 40; th.height = 27;
-    th.getContext('2d').drawImage(l.c, 0, 0, 40, 27);
+    const row = document.createElement('div');
+    row.className = 'layer' + (l === cur ? ' sel' : '');
+    let th = thumbs.get(l);
+    if (!th) { th = Object.assign(document.createElement('canvas'), { width: 40, height: 27 }); thumbs.set(l, th); d.add(l); }
+    if (d.has(l)) { const tc = th.getContext('2d'); tc.clearRect(0, 0, 40, 27); tc.drawImage(l.c, 0, 0, 40, 27); }
     const eye = document.createElement('button'); eye.textContent = l.visible ? '顯示' : '隱藏'; eye.setAttribute('aria-pressed', l.visible);
     eye.disabled = !!stop3d;
     eye.onclick = e => { e.stopPropagation(); l.visible = !l.visible; l.c.style.display = l.visible ? '' : 'none'; list(); };
     const nm = document.createElement('span'); nm.textContent = l.name; nm.title = '雙擊重新命名';
     nm.ondblclick = () => { const t = prompt('圖層名稱', l.name); if (t) { l.name = t; list(); } };
-    d.append(th, nm, eye);
-    d.onclick = () => { cur = l; list(); };
-    return d;
+    row.append(th, nm, eye);
+    row.onclick = () => { cur = l; list(); };
+    return row;
   }));
 }
 
@@ -298,6 +378,30 @@ let last = null, bb = null;
 // 筆劃開始時把圖層複製到 snapC（GPU 端，不做 getImageData）；結束時只裁下筆劃範圍存進復原堆疊
 const snapC = Object.assign(document.createElement('canvas'), { width: W, height: H }), snapX = snapC.getContext('2d');
 const crop = (src, x, y, w, h) => { const c = Object.assign(document.createElement('canvas'), { width: w, height: h }); c.getContext('2d').drawImage(src, x, y, w, h, 0, 0, w, h); return c; };
+// 讀像素一律經過這張 willReadFrequently 的暫存畫布，不要讀圖層自己的 canvas：
+// 對圖層 canvas 做整張 getImageData 會讓它之後的每一次落筆慢 50～80 倍，而且不會回復。
+const rdC = Object.assign(document.createElement('canvas'), { width: W, height: H });
+const rdX = rdC.getContext('2d', { willReadFrequently: true });
+const readPx = c => { rdX.clearRect(0, 0, W, H); rdX.drawImage(c, 0, 0); return rdX.getImageData(0, 0, W, H).data; };
+// 有內容的實際範圍；整張空白回傳 null。用 Uint32 一次讀 4 byte 比逐 byte 快好幾倍
+function alphaBox(c) {
+  const u32 = new Uint32Array(readPx(c).buffer);
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) {
+    const row = y * W, end = row + W;
+    for (let i = row; i < end; i++) if (u32[i] >>> 24) {
+      const x = i - row;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+const unionBox = (a, b) => {
+  if (!a) return b;
+  if (!b) return a;
+  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), x2 = Math.max(a.x + a.w, b.x + b.w), y2 = Math.max(a.y + a.h, b.y + b.h);
+  return { x, y, w: x2 - x, h: y2 - y };
+};
 const evs = e => { const l = e.getCoalescedEvents?.(); return l?.length ? l : [e]; };
 const pos = e => toCanvas(e.clientX, e.clientY);
 // pr 壓力→粗細、po 壓力→濃度、hard 邊緣硬度、flow 每次落點濃度、sp 間距(直徑比)、cap 整筆濃度上限、grain 紙紋、tilt 側鋒
@@ -312,7 +416,7 @@ const BRUSHES = {
 let B = BRUSHES['HB 鉛筆'];
 $('bsel').append(...Object.keys(BRUSHES).map(k => new Option(k)));
 $('bsel').onchange = e => B = BRUSHES[e.target.value];
-const width = e => { const z = $('size').value; return e.pointerType === 'pen' ? z * (1 - B.pr + B.pr * e.pressure) : z; };
+const width = e => { const z = +$('size').value; return e.pointerType === 'pen' ? z * (1 - B.pr + B.pr * e.pressure) : z; };
 // 筆身傾斜程度 0~1：只有傾斜超過 45° 才算側鋒
 const tiltOf = e => {
   const t = e.altitudeAngle != null ? 1 - e.altitudeAngle / (Math.PI / 2) : Math.hypot(e.tiltX || 0, e.tiltY || 0) / 90;
@@ -336,8 +440,8 @@ const grainPat = col => {
 };
 
 let rest = 0;
-function stamp(c, x, y, r, a) {
-  const col = $('color').value;
+// col 由 draw() 一次讀進來：input[type=color].value 每讀一次都要做值正規化，不該每顆筆印讀
+function stamp(c, col, x, y, r, a) {
   c.globalAlpha = a;
   if (B.grain) c.fillStyle = grainPat(col);
   else if (B.hard < 1) { const g = c.createRadialGradient(x, y, r * B.hard, x, y, r); g.addColorStop(0, col); g.addColorStop(1, col + '00'); c.fillStyle = g; }
@@ -350,11 +454,11 @@ function draw(a, b, e) {
   const w = width(e) * (1 + 3 * t), m = w / 2 + 2;
   const fl = B.flow * (pen && B.po ? 1 - B.po + B.po * e.pressure : 1) * (1 - .6 * t);
   bb = [Math.min(bb[0], a[0] - m, b[0] - m), Math.min(bb[1], a[1] - m, b[1] - m), Math.max(bb[2], a[0] + m, b[0] + m), Math.max(bb[3], a[1] + m, b[1] + m)];
-  const c = eraser ? cur.ctx : tctx;
+  const c = eraser ? cur.ctx : tctx, col = $('color').value;
   if (eraser) c.globalCompositeOperation = 'destination-out';
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]), step = Math.max(1, w * B.sp);
   let k = rest;
-  for (; k <= d; k += step) { const f = d ? k / d : 0; stamp(c, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, w / 2, fl); }
+  for (; k <= d; k += step) { const f = d ? k / d : 0; stamp(c, col, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, w / 2, fl); }
   rest = k - d; c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
 }
 
@@ -378,6 +482,27 @@ function strokeTo(p, ev) {
 }
 const strokeMoved = e => { if (!snapped && Math.hypot(e.clientX - qsAt[0], e.clientY - qsAt[1]) > 6) qsArm(e); };
 
+// --- 預測筆跡（Apple Pencil 延遲補償）---
+// 畫在 tmp 之上的獨立圖層，每次事件整層重畫，所以不會累積；真實取樣點一到就重畫成新的預測，
+// 放手時整層丟掉。它是純預覽：永遠不會被合成進圖層，所以就算預測歪了，存下來的圖也不會錯。
+function drawPred(ev) {
+  pctx.clearRect(0, 0, W, H);
+  if (eraser || snapped || !last) return;             // 橡皮擦直接改圖層，拉直線時也不需要
+  const q = ev.getPredictedEvents?.();
+  if (!q || !q.length) return;
+  const t = B.tilt && ev.pointerType === 'pen' ? tiltOf(ev) : 0;
+  const w = width(ev) * (1 + 3 * t), step = Math.max(1, w * B.sp);
+  const fl = B.flow * (ev.pointerType === 'pen' && B.po ? 1 - B.po + B.po * ev.pressure : 1) * (1 - .6 * t);
+  const col = $('color').value;
+  let from = last, k = step; // 從一個步距之後才落印，免得和真實筆跡在筆尖疊成兩倍濃度
+  for (const pe of q) {
+    const to = pos(pe), d = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    if (d <= 0) continue;
+    for (; k <= d; k += step) { const f = k / d; stamp(pctx, col, from[0] + (to[0] - from[0]) * f, from[1] + (to[1] - from[1]) * f, w / 2, fl); }
+    k -= d; from = to;
+  }
+}
+
 let sid = null, pen = false, pan = null, space = false;
 const touches = new Map();
 const midOf = m => { const p = [...m.values()]; return [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2, Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]), Math.atan2(p[1][1] - p[0][1], p[1][0] - p[0][0])]; };
@@ -389,23 +514,31 @@ function startStroke(e, p = pos(e)) {
   sid = e.pointerId; snapX.clearRect(0, 0, W, H); snapX.drawImage(cur.c, 0, 0); bb = [Infinity, Infinity, -Infinity, -Infinity];
   last = st0 = p; lastEv = e; snapped = false;
   rest = 0; tmp.style.opacity = eraser ? 0 : $('alpha').value / 100 * B.cap;
+  pred.style.opacity = tmp.style.opacity; pred.style.display = ''; pctx.clearRect(0, 0, W, H);
   draw(p, p, e); qsArm(e);
 }
 function cancelStroke() {
   if (!last) return;
   clearTimeout(qs);
-  cur.ctx.clearRect(0, 0, W, H); cur.ctx.drawImage(snapC, 0, 0); tctx.clearRect(0, 0, W, H); last = null;
+  cur.ctx.clearRect(0, 0, W, H); cur.ctx.drawImage(snapC, 0, 0); tctx.clearRect(0, 0, W, H); endPred(); last = null;
 }
+// 預測圖層用完就收起來，平常不佔一個合成層
+const endPred = () => { pctx.clearRect(0, 0, W, H); pred.style.display = 'none'; };
 stage.onpointerdown = e => {
+  sRect = null; // 版面可能在兩次互動之間變動，每次互動重新確認一次
   stage.setPointerCapture(e.pointerId);
   if (tf) { tfPts.set(e.pointerId, [e.clientX, e.clientY]); return; }
   if (picking && !touches.size) { pickColor(pos(e)); return; }
   if (guide.mode) { // 先檢查是否按在消失點／地平線把手上
-    const r = stage.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top, R = e.pointerType === 'touch' ? 30 : 16;
+    const r = stageRect(), px = e.clientX - r.left, py = e.clientY - r.top, R = e.pointerType === 'touch' ? 30 : 16;
     const h = gHandles().find(p => { const [hx, hy] = toStage(p.x, p.y); return Math.hypot(hx - px, hy - py) < R; });
     if (h) { gdrag = { id: h.id, pid: e.pointerId }; return; }
   }
-  if (e.pointerType === 'pen') pen = true;
+  if (e.pointerType === 'pen') {
+    pen = true;
+    // 手掌先落在畫布上、筆才下來（iPad 很常見）：把那一筆手掌筆劃丟掉，別讓它混進真正的筆劃
+    if (last && touches.has(sid)) cancelStroke();
+  }
   if (e.pointerType === 'touch') {
     touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (touches.size === 1 || !tap) tap = { t: performance.now(), n: 0, moved: false, start: new Map() };
@@ -419,9 +552,9 @@ stage.onpointerdown = e => {
 const showECur = e => {
   const pressed = e.pointerType === 'pen' && e.pressure > 0;
   eCur = [e.clientX, e.clientY, (pressed ? width(e) * (1 + 3 * (B.tilt ? tiltOf(e) : 0)) : +$('size').value) / 2];
-  drawGuide();
+  drawECur();
 };
-stage.onpointerleave = () => { if (eCur) { eCur = null; drawGuide(); } };
+stage.onpointerleave = () => { if (eCur) { eCur = null; drawECur(); } };
 stage.onpointermove = e => {
   if (eraser && (e.pointerType !== 'touch' || (last && e.pointerId === sid))) showECur(e);
   if (tf) return tfMove(e);
@@ -438,18 +571,21 @@ stage.onpointermove = e => {
     const old = touches.size === 2 ? mid() : null, prev = touches.get(e.pointerId);
     touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (old) {
-      const n = mid(); zoomAt(old[0], old[1], n[2] / old[2]); rotateAt(old[0], old[1], n[3] - old[3]);
+      const n = mid(); zoomV(old[0], old[1], n[2] / old[2]); rotateV(old[0], old[1], n[3] - old[3]);
       v.x += n[0] - old[0]; v.y += n[1] - old[1]; apply();
     } else if (pen && touches.size === 1) { v.x += e.clientX - prev[0]; v.y += e.clientY - prev[1]; apply(); }
     if (touches.size > 1 || pen) return;
   }
   if (pan) { v.x += e.clientX - pan[0]; v.y += e.clientY - pan[1]; pan = [e.clientX, e.clientY]; apply(); return; }
   if (!last || e.pointerId !== sid) return;
-  for (const ev of evs(e)) strokeTo(pos(ev), ev);
+  const list = evs(e);
+  for (const ev of list) strokeTo(pos(ev), ev);
   strokeMoved(e);
+  drawPred(list[list.length - 1]); // 只用品質最新的一個取樣點做預測
 };
-stage.onpointerup = stage.onpointercancel = e => {
-  if (e.pointerType === 'touch' && eCur) { eCur = null; drawGuide(); }
+// pointerup 與 pointercancel 的收尾共用；只有「筆劃要不要留下」不同
+const endPointer = (e, cancelled) => {
+  if (e.pointerType === 'touch' && eCur) { eCur = null; drawECur(); }
   if (tf) { tfPts.delete(e.pointerId); return; }
   const wasTouch = touches.delete(e.pointerId); pan = null;
   if (wasTouch && !touches.size && tap) {
@@ -458,29 +594,47 @@ stage.onpointerup = stage.onpointercancel = e => {
   }
   if (gdrag && e.pointerId === gdrag.pid) { gdrag = null; return; }
   if (!last || e.pointerId !== sid) return;
-  finishStroke();
+  if (cancelled) cancelStroke(); else finishStroke();
 };
+stage.onpointerup = e => endPointer(e, false);
+// pointercancel 是系統把手勢搶走（通知列、多指手勢、手掌誤觸），不該留下一截沒畫完的線
+stage.onpointercancel = e => endPointer(e, true);
 function finishStroke() {
-  last = null; clearTimeout(qs); cur.img = null; // 畫過的底圖不再保留原始圖檔
+  last = null; clearTimeout(qs); dropImg(cur); endPred(); // 畫過的底圖不再保留原始圖檔
   if (!eraser) {
     cur.ctx.globalAlpha = $('alpha').value / 100 * B.cap;
     cur.ctx.drawImage(tmp, 0, 0); cur.ctx.globalAlpha = 1;
     tctx.clearRect(0, 0, W, H);
   }
   const x = Math.max(0, Math.floor(bb[0])), y = Math.max(0, Math.floor(bb[1])), w = Math.min(W, Math.ceil(bb[2])) - x, h = Math.min(H, Math.ceil(bb[3])) - y;
-  if (w > 0 && h > 0) { undos.push({ l: cur, c: crop(snapC, x, y, w, h), x, y }); if (undos.length > 30) undos.shift(); redos = []; }
-  list();
+  if (w > 0 && h > 0) pushUndo({ l: cur, c: crop(snapC, x, y, w, h), x, y });
+  list(cur);
 }
-addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { space = true; e.preventDefault(); } });
+// 空白鍵一律當作平移，不要求焦點在 body：否則左鍵點過工具列按鈕後，按空白鍵會「再按一次」
+// 那顆按鈕（例如剛按過「刪除」就再刪一層）。preventDefault 同時擋掉按鈕的空白鍵啟動。
+addEventListener('keydown', e => { if (e.code === 'Space') { space = true; e.preventDefault(); } });
 addEventListener('keyup', e => { if (e.code === 'Space') space = false; });
 
 // --- 復原 / 重做 ---
+// 以「總位元組」而非筆數為上限：一張 1200×800 的快照就是 3.84 MB，30 張會吃掉上百 MB。
+// 變形用整張快照，所以位元組上限比筆數上限更貼近實際記憶體。
+const UNDO_MAX_BYTES = 64 * 1024 * 1024;
+const undoBytes = e => e.c.width * e.c.height * 4;
+function pushUndo(e) {
+  undos.push(e); redos = [];
+  let total = undos.reduce((s, x) => s + undoBytes(x), 0);
+  while (total > UNDO_MAX_BYTES && undos.length > 1) total -= undoBytes(undos.shift());
+}
+// 圖層被刪掉或合併後，堆疊裡屬於它的快照已經沒有意義，但每一張都還參考著那個 3.84 MB 的
+// canvas；不清掉的話會一直被算在位元組上限裡，直到被新筆劃擠出去
+function purge(L) { undos = undos.filter(u => u.l !== L); redos = redos.filter(u => u.l !== L); }
 function swap(from, to) {
-  const s = from.pop(); if (!s) return;
-  if (!layers.includes(s.l)) return swap(from, to);
+  let s;
+  while ((s = from.pop())) if (layers.includes(s.l)) break; // 丟掉已刪除圖層的紀錄
+  if (!s) return;
   const { x, y } = s, w = s.c.width, h = s.c.height;
   to.push({ l: s.l, c: crop(s.l.c, x, y, w, h), x, y });
-  s.l.img = null; s.l.ctx.clearRect(x, y, w, h); s.l.ctx.drawImage(s.c, x, y); list(); refresh3d?.(s.l);
+  dropImg(s.l); s.l.ctx.clearRect(x, y, w, h); s.l.ctx.drawImage(s.c, x, y); list(s.l); refresh3d?.(s.l);
 }
 $('undo').onclick = () => swap(undos, redos);
 $('redo').onclick = () => swap(redos, undos);
@@ -497,24 +651,24 @@ function toolUi() {
   $('tfm').classList.toggle('on', !!tf); $('pick').classList.toggle('on', picking);
   wrap.style.cursor = eraser && !busy ? 'none' : ''; // 用範圍圈取代十字游標
 }
-$('brush').onclick = () => { eraser = false; eCur = null; toolUi(); drawGuide(); };
+$('brush').onclick = () => { eraser = false; eCur = null; toolUi(); drawECur(); };
 $('eraser').onclick = () => { eraser = true; toolUi(); };
 $('add').onclick = () => addLayer();
 $('del').onclick = () => {
   if (layers.length < 2) return;
-  const i = layers.indexOf(cur); cur.c.remove(); layers.splice(i, 1);
+  const i = layers.indexOf(cur), dead = cur; dead.c.remove(); layers.splice(i, 1); forget(dead); purge(dead);
   cur = layers[Math.max(0, i - 1)]; sync();
 };
 const move = d => { const i = layers.indexOf(cur), j = i + d; if (j < 0 || j >= layers.length) return; [layers[i], layers[j]] = [layers[j], layers[i]]; sync(); };
 $('up').onclick = () => move(1);
 $('down').onclick = () => move(-1);
-$('lalpha').oninput = e => { cur.c.style.opacity = e.target.value / 100; };
+$('lalpha').oninput = e => { cur.c.style.opacity = e.target.value / 100; refresh3d?.(cur); };
 $('merge').onclick = () => {
   const i = layers.indexOf(cur); if (i < 1) return;
   const b = layers[i - 1];
   if (cur.visible) { b.ctx.globalAlpha = cur.c.style.opacity || 1; b.ctx.drawImage(cur.c, 0, 0); b.ctx.globalAlpha = 1; }
-  cur.c.remove(); layers.splice(i, 1); cur = b; b.img = null;
-  undos = undos.filter(u => u.l !== b); redos = redos.filter(u => u.l !== b); sync();
+  const dead = cur; dead.c.remove(); layers.splice(i, 1); cur = b; forget(dead); dropImg(b);
+  purge(dead); purge(b); sync(b);
 };
 
 // --- 變形：移動/縮放/旋轉/翻轉目前圖層。底圖保留原始圖檔，重複變形不會越來越糊 ---
@@ -542,8 +696,11 @@ function endTf() {
   if (!tf) return;
   const { L, m, before } = tf;
   if (L.img) L.tf = m;
-  undos.push({ l: L, c: before, x: 0, y: 0 }); if (undos.length > 30) undos.shift(); redos = [];
-  tf = null; tfUi(); drawGuide(); list();
+  // 只存「變形前後有差異的聯集」範圍：整張 1200×800 是 3.84 MB，鉛筆稿通常只佔一角。
+  // 兩張都是空的就不必進復原堆疊（等於沒改到東西）。
+  const box = unionBox(alphaBox(before), alphaBox(L.c));
+  if (box) pushUndo({ l: L, c: crop(before, box.x, box.y, box.w, box.h), x: box.x, y: box.y });
+  tf = null; tfUi(); drawGuide(); list(L);
 }
 function tfMove(e) {
   if (!tfPts.has(e.pointerId)) return;
@@ -569,7 +726,7 @@ document.querySelector('aside').addEventListener('click', e => { if (tf && !e.ta
 addEventListener('keydown', e => { if (tf && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') endTf(); }, true);
 
 // --- 滴管：下一次點畫布取樣可見圖層的合成顏色 ---
-$('pick').onclick = () => { picking = !picking; toolUi(); };
+$('pick').onclick = () => { picking = !picking; toolUi(); drawECur(); };
 function pickColor([x, y]) {
   picking = false; toolUi();
   x = Math.floor(x); y = Math.floor(y); if (x < 0 || y < 0 || x >= W || y >= H) return;
@@ -617,7 +774,6 @@ async function open3d() {
   lock(true);
   const mkLs = () => layers.filter(l => l.visible && !l.guide).map(l => ({ l, px: null, mesh: null }));
   let ls = mkLs();
-  const sc = Object.assign(document.createElement('canvas'), { width: W, height: H }), sx = sc.getContext('2d', { willReadFrequently: true });
   const renderer = new T.WebGLRenderer({ antialias: true });
   renderer.setClearColor(0x2b2d31); // 跟介面的石墨色一致
   const scene = new T.Scene(), cam = new T.PerspectiveCamera(40, 1, 10, 10000);
@@ -626,6 +782,12 @@ async function open3d() {
   const sun = new T.DirectionalLight(0xffffff, 2); sun.position.set(500, 800, 1000); scene.add(sun);
   box.append(renderer.domElement);
   const ctl = new OC(cam, renderer.domElement);
+  // 只在有變動時才畫，靜止時不燒 GPU（iPad 省電）。OrbitControls 的 update() 只在相機
+  // 真的移動時才丟 'change'，而 raf 要到 draw() 尾端才歸零，所以不會自己把自己叫醒。
+  let raf = 0;
+  const draw = () => { updateMan(); ctl.update(); renderer.render(scene, cam); raf = 0; };
+  const invalidate = () => { if (!raf) raf = requestAnimationFrame(draw); };
+  ctl.addEventListener('change', invalidate);
 
   // --- 固定視角（參考 Rubi-Cube）：自動回正、立即回正、垂直/水平鎖定 ---
   const camHome = new T.Spherical().setFromVector3(cam.position.clone());
@@ -679,11 +841,11 @@ async function open3d() {
     j.bone.quaternion.setFromUnitVectors(up_, d.normalize());
     j.bone.scale.set((j.r + J[j.par].r) * .45, len, (j.r + J[j.par].r) * .45);
   });
-  const setSize = () => man.scale.setScalar($('msize').value / 100);
+  const setSize = () => { man.scale.setScalar($('msize').value / 100); invalidate(); };
   $('msize').oninput = setSize; setSize();
   tog('m3man', false, '人偶', '人偶');
-  $('m3man').onclick = () => { man.visible = !man.visible; $('m3man').classList.toggle('on', man.visible); };
-  $('m3reset').onclick = () => J.forEach((j, i) => j.pos.fromArray(home[i]));
+  $('m3man').onclick = () => { man.visible = !man.visible; $('m3man').classList.toggle('on', man.visible); invalidate(); };
+  $('m3reset').onclick = () => { J.forEach((j, i) => j.pos.fromArray(home[i])); invalidate(); };
   let grab = null;
 
   // 把目前視角下的人偶與透視格線投影成 2D，存成兩個新圖層（輔助線圖層不會顯示在 3D 裡）
@@ -692,8 +854,8 @@ async function open3d() {
     const cw = box.clientWidth, ch = box.clientHeight, vh = ch / 2 * Math.min(W / cw, H / ch), f = cam.projectionMatrix.elements[5], NEAR = -10;
     const toC = v => v.clone().applyMatrix4(cam.matrixWorldInverse);
     const sp = p => [W / 2 + f * vh * p.x / -p.z, H / 2 - f * vh * p.y / -p.z];
-    const prev = cur, sc = man.scale.x;
-    const newLayer = name => { addLayer(); cur.name = name; cur.guide = true; return cur.ctx; };
+    const prev = cur, sc = man.scale.x, made = [];
+    const newLayer = name => { addLayer(); cur.name = name; cur.guide = true; made.push(cur); return cur.ctx; };
 
     const g = newLayer('透視輔助線'); g.lineWidth = 2; g.globalAlpha = .7;
     const line3 = (a, b, col) => {
@@ -722,19 +884,21 @@ async function open3d() {
     });
     if (m) items.sort((p, q) => p.z - q.z).forEach(i => i.f());
 
-    cur = prev; list();
+    cur = prev; list(prev, ...made);
     ls.forEach(e => { if (e.mesh) { scene.remove(e.mesh); e.mesh.dispose(); } }); ls = mkLs(); build();
   };
   const applyPose = name => {
     J.forEach((j, i) => j.pos.fromArray(POSES[name][j.name] || home[i]));
     J.forEach(j => { if (j.par >= 0) { const p = J[j.par].pos; j.pos.sub(p).setLength(j.len).add(p); } });
+    invalidate();
   };
   $('poses').replaceChildren(...Object.keys(POSES).map(k => Object.assign(document.createElement('button'), { textContent: k, onclick: () => applyPose(k) })));
   const zOf = n => (n - (ls.length - 1) / 2) * (+$('depth').value + +$('gap').value);
 
   function buildLayer(n) {
     const e = ls[n]; if (e.mesh) { scene.remove(e.mesh); e.mesh.dispose(); }
-    if (!e.px) e.px = e.l.ctx.getImageData(0, 0, W, H).data;
+    // 一定要透過 rdX（willReadFrequently）讀，不能讀圖層自己的 ctx（理由見 readPx）
+    if (!e.px) { rdX.clearRect(0, 0, W, H); rdX.drawImage(e.l.c, 0, 0); e.px = rdX.getImageData(0, 0, W, H).data; }
     const st = +$('res').value, dp = +$('depth').value, z = zOf(n), a = +(e.l.c.style.opacity || 1), px = e.px, cells = [];
     for (let y = 0; y < H; y += st) for (let x = 0; x < W; x += st) {
       const i = (Math.min(H - 1, y + st / 2 | 0) * W + Math.min(W - 1, x + st / 2 | 0)) * 4;
@@ -745,7 +909,7 @@ async function open3d() {
       m.compose(new T.Vector3(x - W / 2 + st / 2, H / 2 - y - st / 2, z), new T.Quaternion(), new T.Vector3(st, st, dp));
       mesh.setMatrixAt(k, m); mesh.setColorAt(k, c.setRGB(r / 255, g / 255, b / 255, T.SRGBColorSpace));
     });
-    mesh.count = cells.length; e.mesh = mesh; scene.add(mesh);
+    mesh.count = cells.length; e.mesh = mesh; scene.add(mesh); invalidate();
   }
   const build = () => ls.forEach((_, n) => buildLayer(n));
 
@@ -755,9 +919,9 @@ async function open3d() {
     if (!pend.size) requestAnimationFrame(() => {
       pend.forEach(l => {
         const n = ls.findIndex(e => e.l === l); if (n < 0) return;
-        sx.clearRect(0, 0, W, H); sx.drawImage(l.c, 0, 0);
-        if (l === cur && last) { sx.globalAlpha = +tmp.style.opacity || 0; sx.drawImage(tmp, 0, 0); sx.globalAlpha = 1; }
-        ls[n].px = sx.getImageData(0, 0, W, H).data; buildLayer(n);
+        rdX.clearRect(0, 0, W, H); rdX.drawImage(l.c, 0, 0);
+        if (l === cur && last) { rdX.globalAlpha = +tmp.style.opacity || 0; rdX.drawImage(tmp, 0, 0); rdX.drawImage(pred, 0, 0); rdX.globalAlpha = 1; }
+        ls[n].px = rdX.getImageData(0, 0, W, H).data; buildLayer(n);
       });
       pend.clear();
     });
@@ -766,8 +930,9 @@ async function open3d() {
 
   // 把螢幕座標投到「目前圖層所在的平面」，換算成畫布座標
   const ray = new T.Raycaster(), plane = new T.Plane(new T.Vector3(0, 0, 1)), hit = new T.Vector3();
+  let br = null; // renderer 畫布的 rect 也只隨版面變動，理由同 stageRect()
   const aim = ev => {
-    const r = renderer.domElement.getBoundingClientRect();
+    const r = br || (br = renderer.domElement.getBoundingClientRect());
     ray.setFromCamera({ x: (ev.clientX - r.left) / r.width * 2 - 1, y: -((ev.clientY - r.top) / r.height * 2 - 1) }, cam);
   };
   const pick = ev => {
@@ -795,7 +960,7 @@ async function open3d() {
       const h = ray.intersectObjects(J.map(j => j.mesh))[0]; if (!h) return;
       grab = h.object.userData.j; grab.pid = e.pointerId;
       dragPlane.setFromNormalAndCoplanarPoint(cam.getWorldDirection(P).clone(), h.point);
-      e.stopPropagation(); box.setPointerCapture(e.pointerId); grab.mesh.material = hot; return;
+      e.stopPropagation(); box.setPointerCapture(e.pointerId); grab.mesh.material = hot; invalidate(); return;
     }
     if (e.pointerType !== 'pen' && mode !== 0) return;
     const p = pick(e); if (!p) return;
@@ -812,7 +977,7 @@ async function open3d() {
       const par = grab.par >= 0 ? J[grab.par].pos : null;
       if (par) P.sub(par).setLength(grab.len).add(par); // 骨長固定
       const d = P.sub(grab.pos).clone();
-      sub(grab, j => j.pos.add(d));
+      sub(grab, j => j.pos.add(d)); invalidate();
       return;
     }
     if (!last || e.pointerId !== sid) return;
@@ -824,27 +989,28 @@ async function open3d() {
   };
   const up = e => {
     tp.delete(e.pointerId);
-    if (grab && e.pointerId === grab.pid) { grab.mesh.material = jmat; grab = null; return; }
-    if (!last || e.pointerId !== sid) return; e.stopPropagation(); finishStroke(); refresh3d(cur);
+    if (grab && e.pointerId === grab.pid) { grab.mesh.material = jmat; grab = null; invalidate(); return; }
+    if (!last || e.pointerId !== sid) return; e.stopPropagation();
+    if (e.type === 'pointercancel') cancelStroke(); else finishStroke();
+    refresh3d(cur);
   };
   box.addEventListener('pointerdown', down, true);
   box.addEventListener('pointermove', move, true);
   box.addEventListener('pointerup', up, true);
   box.addEventListener('pointercancel', up, true);
 
-  const resize = () => { const w = box.clientWidth, h = box.clientHeight; renderer.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix(); };
-  let raf; const loop = () => { raf = requestAnimationFrame(loop); updateMan(); ctl.update(); renderer.render(scene, cam); };
+  const resize = () => { br = null; const w = box.clientWidth, h = box.clientHeight; renderer.setSize(w, h); cam.aspect = w / h; cam.updateProjectionMatrix(); invalidate(); };
   $('depth').oninput = $('gap').oninput = $('res').onchange = build;
   addEventListener('resize', resize);
   stop3d = () => {
     manPose = J.map(j => j.pos.toArray());
-    cancelAnimationFrame(raf); cancelAnimationFrame(anim); removeEventListener('resize', resize);
+    cancelAnimationFrame(raf); raf = 0; cancelAnimationFrame(anim); removeEventListener('resize', resize);
     ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'].forEach((t, i) => box.removeEventListener(t, [down, move, up, up][i], true));
     scene.traverse(o => o.geometry?.dispose()); ls.forEach(e => e.mesh?.dispose()); [geo, mat, jmat, hot].forEach(x => x.dispose());
     ctl.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); m3.style.display = 'none';
     lock(false); stop3d = refresh3d = null; list();
   };
-  resize(); build(); loop();
+  resize(); build();
 }
 $('d3').onclick = open3d;
 $('m3x').onclick = () => stop3d?.();
@@ -856,15 +1022,22 @@ $('impf').onchange = async e => {
   const img = await createImageBitmap(f).catch(() => null);
   if (!img) return alert('無法讀取這個圖片');
   const prev = cur; cur = layers[0]; addLayer();
-  cur.img = img; cur.tf = fitTf(img); paintTf(cur.ctx, img, cur.tf);
-  cur.name = '底圖'; cur.c.style.opacity = .5;
-  cur = prev; list();
+  const base = cur;
+  base.img = img; base.tf = fitTf(img); paintTf(base.ctx, img, base.tf);
+  base.name = '底圖'; base.c.style.opacity = .5;
+  cur = prev; list(base);
 };
 
 $('save').onclick = () => {
   const o = Object.assign(document.createElement('canvas'), { width: W, height: H }), x = o.getContext('2d');
   layers.filter(l => l.visible).forEach(l => { x.globalAlpha = l.c.style.opacity || 1; x.drawImage(l.c, 0, 0); });
-  Object.assign(document.createElement('a'), { href: o.toDataURL(), download: 'drawing.png' }).click();
+  // toBlob 直接產生二進位，不必先組出數 MB 的 base64 字串
+  o.toBlob(b => {
+    if (!b) return;
+    const u = URL.createObjectURL(b);
+    Object.assign(document.createElement('a'), { href: u, download: 'drawing.png' }).click();
+    setTimeout(() => URL.revokeObjectURL(u), 10000);
+  }, 'image/png');
 };
 
 addLayer(true); addLayer();
