@@ -163,6 +163,7 @@ const $ = id => document.getElementById(id);
 const wrap = $('wrap');
 let layers = [], cur = null, eraser = false, n = 0, undos = [], redos = [];
 let tf = null; // 變形中的狀態（覆蓋層一開始就會讀到，所以放最前面）
+let picking = false; // 滴管等待點選中
 
 // 暫存筆劃層：筆刷畫在這裡，放開時才以「濃度」合成到圖層，避免重疊處變深
 const tmp = Object.assign(document.createElement('canvas'), { width: W, height: H });
@@ -473,8 +474,14 @@ addEventListener('keydown', e => {
 
 // --- 工具列 ---
 $('fit').onclick = fit;
-$('brush').onclick = () => { eraser = false; $('brush').classList.add('on'); $('eraser').classList.remove('on'); };
-$('eraser').onclick = () => { eraser = true; $('eraser').classList.add('on'); $('brush').classList.remove('on'); };
+// 工具列一次只亮一個：變形或滴管進行中時，筆刷/橡皮擦先暗下來
+function toolUi() {
+  const busy = tf || picking;
+  $('brush').classList.toggle('on', !busy && !eraser); $('eraser').classList.toggle('on', !busy && eraser);
+  $('tfm').classList.toggle('on', !!tf); $('pick').classList.toggle('on', picking);
+}
+$('brush').onclick = () => { eraser = false; toolUi(); };
+$('eraser').onclick = () => { eraser = true; toolUi(); };
 $('add').onclick = () => addLayer();
 $('del').onclick = () => {
   if (layers.length < 2) return;
@@ -502,7 +509,7 @@ function paintTf(ctx, src, m) {
   ctx.drawImage(src, -src.width / 2, -src.height / 2); ctx.restore();
 }
 const tfUi = () => {
-  $('tfbar').style.display = tf ? 'flex' : 'none'; $('tfm').classList.toggle('on', !!tf);
+  $('tfbar').style.display = tf ? 'flex' : 'none'; toolUi();
   if (!tf) return;
   $('tfs').value = tf.m.s * 100; $('tfr').value = Math.round(((tf.m.r * 180 / Math.PI) % 360 + 540) % 360 - 180);
 };
@@ -545,10 +552,9 @@ document.querySelector('aside').addEventListener('click', e => { if (tf && !e.ta
 addEventListener('keydown', e => { if (tf && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') endTf(); }, true);
 
 // --- 滴管：下一次點畫布取樣可見圖層的合成顏色 ---
-let picking = false;
-$('pick').onclick = () => { picking = !picking; $('pick').classList.toggle('on', picking); };
+$('pick').onclick = () => { picking = !picking; toolUi(); };
 function pickColor([x, y]) {
-  picking = false; $('pick').classList.remove('on');
+  picking = false; toolUi();
   x = Math.floor(x); y = Math.floor(y); if (x < 0 || y < 0 || x >= W || y >= H) return;
   const c = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
   c.fillStyle = '#fff'; c.fillRect(0, 0, 1, 1);
