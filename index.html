@@ -24,7 +24,9 @@
     background:conic-gradient(#d9d9d9 25%,#fff 0 50%,#d9d9d9 0 75%,#fff 0) 0 0/20px 20px}
   /* 讓命中測試直接落在 stage，不必穿過每張圖層畫布 */
   #wrap canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-  #uitog{position:absolute;top:10px;right:calc(var(--aside) + 10px);z-index:11;min-height:36px;padding:0 12px;
+  /* 收合鈕必須放在 #stage 外面：stage 為了畫圖會 setPointerCapture，把後續事件（含 click）
+     全部重導到自己身上，擺在 stage 裡的按鈕就永遠收不到 click。定位改相對於 body。 */
+  #uitog{position:absolute;top:10px;right:calc(var(--aside) + 10px);z-index:11;min-height:40px;padding:0 12px;
     background:rgba(35,36,40,.82);border-color:#5a5e66;
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 
@@ -123,7 +125,8 @@
   </div>
   <div id="m3c"></div>
 </div>
-<div id="stage"><button id="uitog" title="收合面板" aria-label="收合面板"></button><div id="wrap"></div></div>
+<div id="stage"><div id="wrap"></div></div>
+<button id="uitog" title="收合面板" aria-label="收合面板"></button>
 <aside>
   <section class="grp">
     <div class="seg">
@@ -546,6 +549,7 @@ stage.onpointerdown = e => {
     if (touches.size >= 2) cancelStroke();
     if (touches.size >= 2 || pen) return; // 兩指一律是手勢；偵測到 Apple Pencil 後單指也只負責平移
   } else if (e.button === 1 || space) { pan = [e.clientX, e.clientY]; return; }
+  if (e.pointerType === 'mouse' && e.button !== 0) return; // 右鍵／其他鍵不該落筆
   startStroke(e);
 };
 // 滑鼠、Pencil 懸停或正在擦的時候顯示範圍；手指只在擦的過程中顯示
