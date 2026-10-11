@@ -466,15 +466,13 @@ function draw(a, b, e) {
 }
 
 // QuickShape：筆停住 0.5 秒就把這一筆拉直成直線，之後移動可調整終點
-let st0 = null, snapped = false, qs = 0, qsAt = null, lastEv = null;
+let st0 = null, snapped = false, qs = 0, qsAt = null, qsSm = null, lastEv = null;
 // 記住 QuickShape 開關（localStorage 可能在私密瀏覽被擋，失敗就用預設值）
 try { $('qson').checked = localStorage.getItem('qson') !== '0'; } catch {}
 $('qson').onchange = e => { try { localStorage.setItem('qson', e.target.checked ? '1' : '0'); } catch {} };
-function qsArm(e) {
-  clearTimeout(qs); qsAt = [e.clientX, e.clientY];
-  if (!$('qson').checked) return;
-  qs = setTimeout(() => { if (!last) return; snapped = true; redrawLine(); refresh3d?.(cur); }, 500);
-}
+const qsSnap = () => { if (!last) return; snapped = true; redrawLine(); refresh3d?.(cur); };
+const qsRestart = () => { clearTimeout(qs); if ($('qson').checked) qs = setTimeout(qsSnap, 500); };
+function qsArm(e) { qsAt = qsSm = [e.clientX, e.clientY]; qsRestart(); }
 function redrawLine() {
   if (eraser) { cur.ctx.clearRect(0, 0, W, H); cur.ctx.drawImage(snapC, 0, 0); } else tctx.clearRect(0, 0, W, H);
   rest = 0; draw(st0, last, lastEv);
@@ -483,7 +481,14 @@ function strokeTo(p, ev) {
   const a = last; lastEv = ev; last = p;
   if (snapped) redrawLine(); else draw(a, p, ev);
 }
-const strokeMoved = e => { if (!snapped && Math.hypot(e.clientX - qsAt[0], e.clientY - qsAt[1]) > 6) qsArm(e); };
+// 「停筆」用指數平滑後的位置判斷：iPad 的筆尖即使按住不動也會持續送出帶抖動的取樣，直接比
+// 瞬時位置的話，抖動一超過門檻就不斷重新計時，拉直永遠不會觸發（實測抖動 ±7px 就完全失效）。
+const strokeMoved = e => {
+  if (snapped) return;
+  qsSm = [qsSm[0] + (e.clientX - qsSm[0]) * .2, qsSm[1] + (e.clientY - qsSm[1]) * .2];
+  if (Math.hypot(qsSm[0] - qsAt[0], qsSm[1] - qsAt[1]) <= 6) return;
+  qsAt = qsSm.slice(); qsRestart();
+};
 
 // --- 預測筆跡（Apple Pencil 延遲補償）---
 // 畫在 tmp 之上的獨立圖層，每次事件整層重畫，所以不會累積；真實取樣點一到就重畫成新的預測，
