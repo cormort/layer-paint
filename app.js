@@ -542,9 +542,20 @@ try { eraserSoft = localStorage.getItem('esoft') === '1'; $('esoft').checked = e
 $('esoft').onchange = e => { eraserSoft = e.target.checked; try { localStorage.setItem('esoft', eraserSoft ? '1' : '0'); } catch {} };
 const isSoftErase = () => eraser && eraserSoft;
 
+function setEraser(state) {
+  eraser = !!state;
+  if (!eraser) eCur = null;
+  toolUi();
+  drawECur();
+}
+function ensureBrushMode() {
+  if (eraser) setEraser(false);
+}
+
 const DISPLAY_BRUSH_KEYS = ['鉛筆', '彩色鉛筆', '鋼筆', '粉蠟筆', 'Marker', '丙烯馬克筆', '水彩', '噴槍'];
 $('bsel').append(...DISPLAY_BRUSH_KEYS.map(k => new Option(k)));
 $('bsel').onchange = e => {
+  ensureBrushMode();
   B = BRUSHES[e.target.value] || BRUSHES['鉛筆'];
   updateBrushSubpanels();
 };
@@ -649,6 +660,7 @@ function renderHardnessBar() {
     btn.textContent = h;
     btn.title = `${h} 鉛筆（${PENCIL_HARDNESS[h].desc}）`;
     btn.onclick = () => {
+      ensureBrushMode();
       curHardness = h;
       bar.querySelectorAll('.hardness-btn').forEach(b => b.classList.toggle('on', b.textContent === h));
       if (B.id === 'pencil') {
@@ -672,6 +684,7 @@ function renderNibBar() {
     btn.textContent = info.label;
     btn.title = `${info.label}：${info.desc}`;
     btn.onclick = () => {
+      ensureBrushMode();
       curNib = key;
       bar.querySelectorAll('.nib-btn').forEach((b, i) => b.classList.toggle('on', Object.keys(PEN_NIBS)[i] === key));
     };
@@ -693,6 +706,7 @@ function renderPalette(palKey) {
     tab.className = 'palette-tab' + (count === activeCount ? ' on' : '');
     tab.textContent = `${count}色`;
     tab.onclick = () => {
+      ensureBrushMode();
       curPalCounts[palKey] = count;
       renderPalette(palKey);
     };
@@ -712,6 +726,7 @@ function renderPalette(palKey) {
       sw.classList.add('light-border');
     }
     sw.onclick = () => {
+      ensureBrushMode();
       $('color').value = c;
       grid.querySelectorAll('.swatch').forEach(s => s.classList.remove('on'));
       sw.classList.add('on');
@@ -731,6 +746,7 @@ function renderWcTypesBar() {
     btn.textContent = info.label;
     btn.title = `${info.label}：${info.desc}`;
     btn.onclick = () => {
+      ensureBrushMode();
       curWcType = key;
       bar.querySelectorAll('.wc-btn').forEach((b, i) => b.classList.toggle('on', Object.keys(WC_BRUSHES)[i] === key));
       if (B.id === 'wc' || B.wet) {
@@ -778,11 +794,13 @@ function updateBrushSubpanels() {
 }
 
 $('color').oninput = e => {
+  ensureBrushMode();
   const hex = e.target.value.toLowerCase();
   $('palette-grid')?.querySelectorAll('.swatch').forEach(s => {
     s.classList.toggle('on', s.title.toLowerCase().includes(hex));
   });
 };
+$('color').onclick = () => ensureBrushMode();
 
 // --- 自訂筆尖：把一張圖當印章蓋（例如 remove-bg 切出來的素材 PNG）---
 // 正規化到 TIP 見方（保持長寬比、置中），可選用目前顏色著色；依 (是否保留原色, 顏色) 快取
@@ -805,8 +823,8 @@ function setTip(img, name) {
   $('tipimp').classList.toggle('on', !!img);
   $('tipclr').disabled = !img;
 }
-$('tipimp').onclick = () => $('tipf').click();
-$('tipclr').onclick = () => setTip(null, '');
+$('tipimp').onclick = () => { ensureBrushMode(); $('tipf').click(); };
+$('tipclr').onclick = () => { ensureBrushMode(); setTip(null, ''); };
 $('tipraw').onchange = () => { tipCv = tipKey = null; };
 $('tipf').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
@@ -1241,11 +1259,24 @@ $('vfit').onclick = fit;
 $('vdetail').onclick = () => zoomDetail(1.0);
 
 addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
   if (e.metaKey || e.ctrlKey) {
     if (e.key === '=' || e.key === '+') { e.preventDefault(); $('zin').click(); }
     else if (e.key === '-') { e.preventDefault(); $('zout').click(); }
     else if (e.key === '0') { e.preventDefault(); $('vfit').click(); }
     else if (e.key === '1') { e.preventDefault(); $('vdetail').click(); }
+  } else if (!e.altKey) {
+    if (e.key === 'b' || e.key === 'B') {
+      e.preventDefault();
+      setEraser(false);
+    } else if (e.key === 'e' || e.key === 'E') {
+      e.preventDefault();
+      setEraser(!eraser);
+    } else if (e.key === 'Escape' && eraser) {
+      e.preventDefault();
+      setEraser(false);
+    }
   }
 });
 
@@ -1380,9 +1411,20 @@ function toolUi() {
   $('brush').classList.toggle('on', !busy && !eraser); $('eraser').classList.toggle('on', !busy && eraser);
   $('tfm').classList.toggle('on', !!tf); $('pick').classList.toggle('on', picking);
   wrap.style.cursor = eraser && !busy ? 'none' : ''; // 用範圍圈取代十字游標
+
+  if ($('tool-title')) $('tool-title').textContent = eraser ? '橡皮擦設定' : '筆刷設定';
+  if ($('tool-badge')) {
+    $('tool-badge').textContent = eraser ? '橡皮擦' : '筆刷';
+    $('tool-badge').classList.toggle('eraser-mode', eraser);
+  }
+  if ($('eraser-banner')) $('eraser-banner').style.display = eraser ? 'flex' : 'none';
+  if ($('lbl-esoft')) $('lbl-esoft').classList.toggle('highlight', eraser);
+  if ($('btn-esoft-done')) $('btn-esoft-done').style.display = eraser ? 'inline-flex' : 'none';
 }
-$('brush').onclick = () => { eraser = false; eCur = null; toolUi(); drawECur(); };
-$('eraser').onclick = () => { eraser = true; toolUi(); };
+$('brush').onclick = () => setEraser(false);
+$('eraser').onclick = () => setEraser(!eraser); // 再次點擊橡皮擦可切換回筆刷
+if ($('btn-to-brush')) $('btn-to-brush').onclick = () => setEraser(false);
+if ($('btn-esoft-done')) $('btn-esoft-done').onclick = () => setEraser(false);
 $('add').onclick = () => addLayer();
 // 刪除圖層：工具列的「刪除」與圖層列上的 ✕ 共用；鎖定的圖層不給刪
 function delLayer(L) {
@@ -1471,7 +1513,7 @@ addEventListener('keydown', e => { if (tf && (e.metaKey || e.ctrlKey) && e.key.t
 // --- 滴管：下一次點畫布取樣可見圖層的合成顏色 ---
 $('pick').onclick = () => { picking = !picking; toolUi(); drawECur(); };
 function pickColor([x, y]) {
-  picking = false; eraser = false; toolUi(); // 取完色直接切回筆刷，不用再按一次
+  picking = false; setEraser(false); // 取完色直接切回筆刷，不用再按一次
   x = Math.floor(x); y = Math.floor(y); if (x < 0 || y < 0 || x >= W || y >= H) return;
   const c = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
   c.fillStyle = '#fff'; c.fillRect(0, 0, 1, 1);

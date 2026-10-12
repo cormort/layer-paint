@@ -82,8 +82,18 @@
   <span class="hint">拖曳移動，兩指捏合可縮放與旋轉</span>
 </div>
 <aside>
-  <section class="grp">
-    <h2>筆刷</h2>
+  <section class="grp" id="sec-tool">
+    <div class="tool-title-row">
+      <h2 id="tool-title">筆刷設定</h2>
+      <span id="tool-badge" class="tool-badge">筆刷</span>
+    </div>
+    <div id="eraser-banner" class="eraser-banner" style="display:none">
+      <div class="eb-msg">
+        <span class="eb-dot"></span>
+        <span>橡皮擦模式中</span>
+      </div>
+      <button id="btn-to-brush" class="btn-to-brush" type="button" title="切換回筆刷 (快捷鍵 B)">切換回筆刷 ✎</button>
+    </div>
     <div class="brushline"><select id="bsel" aria-label="筆刷"></select><input id="color" type="color" value="#222222" aria-label="顏色"></div>
     <!-- 鉛筆硬度面板 -->
     <div id="sub-pencil" class="brush-subpanel">
@@ -112,8 +122,11 @@
     <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
     <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
     <label class="check"><input id="qson" type="checkbox" checked> 停筆拉成直線</label>
-    <label class="check" title="勾選＝沿用目前筆刷的濃度、紙紋與側鋒去擦，會有顆粒感、也會留下殘影（鉛筆稿的局部減淡很好用）；不勾＝乾淨的硬邊橡皮擦，一筆擦掉">
-      <input id="esoft" type="checkbox"> 橡皮擦保留筆刷質感</label>
+    <div class="esoft-row">
+      <label class="check" id="lbl-esoft" title="勾選＝沿用目前筆刷的濃度、紙紋與側鋒去擦，會有顆粒感、也會留下殘影（鉛筆稿的局部減淡很好用）；不勾＝乾淨的硬邊橡皮擦，一筆擦掉">
+        <input id="esoft" type="checkbox"> 橡皮擦保留筆刷質感</label>
+      <button id="btn-esoft-done" type="button" class="btn-subtle" style="display:none" title="完成設定切換回筆刷">返回筆刷</button>
+    </div>
     <div class="row">
       <button id="tipimp" title="匯入一張圖當筆尖，例如 remove-bg 切出來的素材">匯入筆尖</button>
       <button id="tipclr" class="icon" aria-label="清除筆尖" title="清除筆尖" disabled>✕</button>

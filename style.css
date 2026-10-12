@@ -259,6 +259,115 @@ input[type=color] {
 input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
 input[type=color]::-webkit-color-swatch { border: 0; border-radius: 50%; }
 input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
+
+/* 筆刷與橡皮擦狀態提示 */
+.tool-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+.tool-title-row h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tool-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .08);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  transition: all .15s ease;
+}
+.tool-badge.eraser-mode {
+  background: rgba(239, 68, 68, .18);
+  color: #ff9999;
+  border-color: rgba(239, 68, 68, .4);
+}
+
+.eraser-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  margin: 4px 0 6px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, .16), rgba(249, 115, 22, .12));
+  border: 1px solid rgba(239, 68, 68, .35);
+  border-radius: 8px;
+}
+.eb-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffb4b4;
+}
+.eb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff4d4d;
+  box-shadow: 0 0 6px #ff4d4d;
+}
+.btn-to-brush {
+  min-height: 26px !important;
+  height: 26px;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  color: #ffffff !important;
+  background: #2563eb !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, .4);
+  transition: transform .1s, background .15s;
+}
+.btn-to-brush:hover {
+  background: #3b82f6 !important;
+  transform: translateY(-1px);
+}
+.btn-to-brush:active {
+  transform: translateY(0);
+}
+
+.esoft-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.esoft-row .check {
+  margin: 0;
+}
+.btn-subtle {
+  min-height: 22px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-subtle:hover {
+  background: var(--btn-on-bg);
+  border-color: var(--btn-on-line);
+}
+#lbl-esoft.highlight {
+  background: rgba(239, 68, 68, .1);
+  border-radius: 6px;
+  padding: 2px 4px;
+}
+
 .brushline { display: flex; gap: 10px; align-items: center; }
 
 /* 筆刷專屬子選項面板 */
