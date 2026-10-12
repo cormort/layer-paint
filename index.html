@@ -30,6 +30,7 @@
   <div id="m3c"></div>
 </div>
 <header id="topbar">
+  <button id="btn-new-doc" class="btn-new-doc" title="新增畫布／紙張尺寸選擇 (⌘N)">📄 新畫布</button>
   <button id="popen" title="開啟先前存的 .lpaint 專案">開專案</button>
   <button id="psave" title="存成可再編輯的專案檔（保留圖層）">存專案</button>
   <label class="check" title="勾選：專案會附上匯入時的原始圖檔，之後可以無損地重複變形底圖，檔案較大">
@@ -39,7 +40,8 @@
   <input id="pfile" type="file" hidden>
   <input id="impf" type="file" accept="image/*" hidden>
   <span class="sep"></span>
-  <label>版面 <select id="vsize" aria-label="版面尺寸"></select></label>
+  <button id="btn-paper-select" class="btn-paper-select" title="紙張尺寸與版面規格 (⌘N)">📐 <span id="vsize-label">1200×1600</span> ▾</button>
+  <select id="vsize" aria-label="版面尺寸" style="display:none"></select>
   <button id="vori" title="切換直式／橫式">直式</button>
   <span class="spacer"></span>
   <div class="seg">
@@ -68,6 +70,110 @@
     <button id="et-now" type="button" title="立即切換回筆刷">立即切換 ✎</button>
   </div>
   <div class="et-track"><div id="et-progress" class="et-progress"></div></div>
+</div>
+<div id="new-doc-modal" class="new-doc-modal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="nd-title">
+  <div class="nd-backdrop" id="nd-backdrop"></div>
+  <div class="nd-dialog">
+    <!-- macOS Sidebar -->
+    <div class="nd-sidebar">
+      <div class="nd-mac-dots">
+        <span class="nd-dot nd-dot-close" id="nd-dot-close" title="關閉視窗 (Esc)"></span>
+        <span class="nd-dot nd-dot-min" id="nd-dot-min" title="關閉視窗"></span>
+        <span class="nd-dot nd-dot-max" id="nd-dot-max" title="全螢幕"></span>
+      </div>
+      <div class="nd-app-brand">
+        <div class="nd-logo-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="nd-brand-meta">
+          <span class="nd-brand-name">LayerPaint</span>
+          <span class="nd-brand-sub">Studio</span>
+        </div>
+      </div>
+      <nav class="nd-nav">
+        <button id="nd-tab-new" class="nd-nav-item active" type="button">
+          <span class="nd-nav-icon">✨</span>
+          <span class="nd-nav-text">新增畫布</span>
+          <kbd class="nd-kbd">⌘N</kbd>
+        </button>
+        <button id="nd-tab-open" class="nd-nav-item" type="button">
+          <span class="nd-nav-icon">📁</span>
+          <span class="nd-nav-text">開啟專案</span>
+          <kbd class="nd-kbd">⌘O</kbd>
+        </button>
+        <button id="nd-tab-imp" class="nd-nav-item" type="button">
+          <span class="nd-nav-icon">🖼️</span>
+          <span class="nd-nav-text">匯入底圖</span>
+        </button>
+      </nav>
+      <div class="nd-sidebar-footer">
+        <button id="nd-btn-close" class="nd-btn-ghost" type="button">✕ 關閉 (Esc)</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="nd-main">
+      <header class="nd-header">
+        <div class="nd-header-titles">
+          <h1 id="nd-title" class="nd-title">LayerPaint Studio <span class="nd-author">by Tenzen.studio</span></h1>
+          <p class="nd-subtitle">選擇紙張規格快速開工，或拖曳圖片建立畫布。</p>
+        </div>
+        <div class="nd-header-actions">
+          <div class="nd-seg-group" title="選擇畫布方向">
+            <button id="nd-ori-portrait" class="nd-seg-btn active" type="button">▯ 直式</button>
+            <button id="nd-ori-landscape" class="nd-seg-btn" type="button">▭ 橫式</button>
+          </div>
+          <div class="nd-seg-group" title="建立新檔或變更目前畫布">
+            <button id="nd-mode-new" class="nd-seg-btn active" type="button" title="清空建立全新空白畫布">✨ 開新畫布</button>
+            <button id="nd-mode-resize" class="nd-seg-btn" type="button" title="調整目前畫布尺寸並保留圖層內容">📐 調整版面</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Section: Presets Grid -->
+      <section class="nd-section">
+        <div class="nd-section-header">
+          <span class="nd-section-title">快速選擇紙張尺寸 (Start a new file fast)</span>
+          <span class="nd-cur-status" id="nd-cur-status">目前尺寸：1200 × 1600 px (3:4)</span>
+        </div>
+        <div class="nd-presets-grid" id="nd-presets-grid"></div>
+
+        <!-- Custom Size Drawer/Panel -->
+        <div class="nd-custom-panel" id="nd-custom-panel" style="display:none">
+          <div class="nd-custom-row">
+            <span class="nd-custom-label">自訂尺寸：</span>
+            <label>寬 <input id="nd-cust-w" type="number" min="64" max="4096" value="1920"> px</label>
+            <span class="nd-cust-x">×</span>
+            <label>高 <input id="nd-cust-h" type="number" min="64" max="4096" value="1080"> px</label>
+            <button id="nd-cust-apply" class="nd-btn-primary" type="button">建立自訂尺寸</button>
+            <button id="nd-cust-cancel" class="nd-btn-subtle" type="button">收起</button>
+          </div>
+        </div>
+
+        <!-- More Presets Panel -->
+        <div class="nd-more-panel" id="nd-more-panel" style="display:none">
+          <div class="nd-more-grid" id="nd-more-grid"></div>
+        </div>
+      </section>
+
+      <!-- Section: Drag & Drop Zone -->
+      <section class="nd-section nd-section-drop">
+        <div class="nd-dropzone" id="nd-dropzone">
+          <div class="nd-dz-icon">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="3" width="18" height="18" rx="3" ry="3"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="M21 15l-5-5L5 21"/>
+            </svg>
+          </div>
+          <div class="nd-dz-title">拖曳圖片或 .lpaint 專案至此處</div>
+          <div class="nd-dz-desc">或 <button id="nd-dz-browse" type="button" class="nd-dz-link">選取本機檔案</button> 快速開啟自動對應尺寸</div>
+        </div>
+      </section>
+    </main>
+  </div>
 </div>
 <div id="stage">
   <div id="wrap"></div>

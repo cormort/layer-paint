@@ -1438,22 +1438,35 @@ $('vdetail').onclick = () => zoomDetail(1.0);
 
 addEventListener('keydown', e => {
   const tag = (e.target.tagName || '').toLowerCase();
-  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+    if (e.key === 'Escape') closeNewDocModal?.();
+    return;
+  }
   if (e.metaKey || e.ctrlKey) {
-    if (e.key === '=' || e.key === '+') { e.preventDefault(); $('zin').click(); }
+    if (e.key.toLowerCase() === 'n') { e.preventDefault(); openNewDocModal?.(); }
+    else if (e.key.toLowerCase() === 'o') { e.preventDefault(); $('pfile').click(); }
+    else if (e.key === '=' || e.key === '+') { e.preventDefault(); $('zin').click(); }
     else if (e.key === '-') { e.preventDefault(); $('zout').click(); }
     else if (e.key === '0') { e.preventDefault(); $('vfit').click(); }
     else if (e.key === '1') { e.preventDefault(); $('vdetail').click(); }
   } else if (!e.altKey) {
-    if (e.key === 'b' || e.key === 'B') {
+    if (e.key === 'Escape') {
+      const nm = $('new-doc-modal');
+      if (nm && nm.style.display !== 'none') {
+        e.preventDefault();
+        closeNewDocModal();
+        return;
+      }
+      if (eraser) {
+        e.preventDefault();
+        setEraser(false);
+      }
+    } else if (e.key === 'b' || e.key === 'B') {
       e.preventDefault();
       setEraser(false);
     } else if (e.key === 'e' || e.key === 'E') {
       e.preventDefault();
       setEraser(!eraser);
-    } else if (e.key === 'Escape' && eraser) {
-      e.preventDefault();
-      setEraser(false);
     }
   }
 });
@@ -2099,21 +2112,45 @@ $('pfile').onchange = async e => {
   try { await openProject(f); } catch (err) { alert('無法開啟這個檔案：' + err.message); }
 };
 
-// --- 版面尺寸／方向：以中心為基準擴大或裁切畫布，內容不縮放 ---
-// 預設尺寸一律以直式（寬 ≤ 高）表示，方向由目前版面決定
+// --- 紙張尺寸與版面規格系統 (Photon Studio 風格) ---
+const PAPER_PRESETS = [
+  { id: 'web', name: 'Web', w: 1920, h: 1080, desc: '1920 × 1080 px', natural: 'landscape', tag: '16:9' },
+  { id: 'letter', name: 'Letter', w: 1275, h: 1650, desc: '8.5 × 11 in', natural: 'portrait', tag: '8.5 × 11 in' },
+  { id: 'a4', name: 'A4', w: 1240, h: 1754, desc: '210 × 297 mm', natural: 'portrait', tag: '210 × 297 mm' },
+  { id: 'photo', name: 'Photo', w: 1800, h: 1200, desc: '6 × 4 in', natural: 'landscape', tag: '6 × 4 in' },
+  { id: 'insta', name: 'Instagram', w: 1080, h: 1350, desc: '1080 × 1350 px', natural: 'portrait', tag: '1080 × 1350 px' },
+  { id: 'yt', name: 'YouTube', w: 1280, h: 720, desc: '1280 × 720 px', natural: 'landscape', tag: '1280 × 720 px' },
+  { id: 'iphone', name: 'iPhone 16', w: 1179, h: 2556, desc: '1179 × 2556 px', natural: 'portrait', tag: '1179 × 2556 px' },
+];
+
+const MORE_PAPER_PRESETS = [
+  { name: '插畫常用 3:4', w: 1200, h: 1600, desc: '1200 × 1600 px (經典畫布)' },
+  { name: '方形 1:1', w: 1600, h: 1600, desc: '1600 × 1600 px (社群頭貼/方圖)' },
+  { name: 'A3 原寸', w: 1754, h: 2480, desc: '297 × 420 mm (高畫質海報)' },
+  { name: 'A5 便攜', w: 874, h: 1240, desc: '148 × 210 mm (隨身繪圖手帳)' },
+  { name: 'B5 漫畫本', w: 1200, h: 1696, desc: '182 × 257 mm (同人誌)' },
+  { name: '4K UHD', w: 3840, h: 2160, desc: '3840 × 2160 px 超高畫質' },
+  { name: '2K QHD', w: 2560, h: 1440, desc: '2560 × 1440 px 繪圖螢幕' },
+  { name: 'X / Twitter Banner', w: 1500, h: 500, desc: '1500 × 500 px (3:1 封面橫幅)' },
+  { name: '手機 9:16', w: 1080, h: 1920, desc: '1080 × 1920 px (限時動態/Reels)' },
+  { name: '漫畫原稿 B4', w: 1754, h: 2508, desc: '257 × 364 mm (專業印刷原稿)' },
+];
+
 const SIZES = [[1200, 1600, '3:4'], [1200, 1800, '2:3'], [1080, 1920, '9:16'], [1240, 1754, 'A4'], [1600, 1600, '1:1']];
 $('vsize').append(
-  ...SIZES.map(([w, h]) => new Option('', w + ',' + h)), // 文字由 sizeUi() 依方向填入
+  ...SIZES.map(([w, h]) => new Option('', w + ',' + h)),
   new Option('自訂…', 'custom'));
-// 非預設尺寸（自訂或專案檔帶來的）用一個臨時選項顯示；iOS Safari 不吃 option[hidden]，所以直接增刪
 const curOpt = new Option('', 'cur');
+
+let ndIsLandscape = false;
+let ndMode = 'new'; // 'new' (建立全新畫布) | 'resize' (裁切/調整現有畫布)
+
 function sizeUi() {
   const a = Math.min(W, H), b = Math.max(W, H), s = $('vsize'), k = a + ',' + b;
   const preset = SIZES.some(([w, h]) => w + ',' + h === k);
   if (preset) curOpt.remove();
   else { curOpt.textContent = `${W}×${H}`; s.insertBefore(curOpt, s.querySelector('[value=custom]')); }
   s.value = preset ? k : 'cur';
-  // 預設選項的數字跟著目前方向顯示（橫式時寬高對調），選單上看到的就是實際尺寸
   const land = W > H;
   SIZES.forEach(([w, h, t], i) => {
     const r = land && t.includes(':') ? t.split(':').reverse().join(':') : t;
@@ -2123,7 +2160,17 @@ function sizeUi() {
   const o = $('vori');
   o.textContent = W === H ? '方形' : W > H ? '橫式' : '直式';
   o.disabled = W === H;
+
+  // 更新 topbar 紙張尺寸按鈕與對話框狀態標籤
+  const vl = $('vsize-label');
+  if (vl) {
+    const match = PAPER_PRESETS.find(p => Math.min(p.w, p.h) === a && Math.max(p.w, p.h) === b);
+    vl.textContent = (match ? match.name + ' ' : '') + `${W}×${H}`;
+  }
+  const curSt = $('nd-cur-status');
+  if (curSt) curSt.textContent = `目前畫布：${W} × ${H} px (${W === H ? '方形' : W > H ? '橫式' : '直式'})`;
 }
+
 function resizeDoc(w, h) {
   if (w === W && h === H) return sizeUi();
   if ((undos.length || w < W || h < H) &&
@@ -2132,28 +2179,299 @@ function resizeDoc(w, h) {
   const dx = Math.round((w - W) / 2), dy = Math.round((h - H) / 2);
   layers.forEach(L => {
     const c = Object.assign(document.createElement('canvas'), { width: w, height: h }), x = c.getContext('2d');
-    if (L.bg) { x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); } // 背景層新增的區域補白
+    if (L.bg) { x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); }
     x.drawImage(L.c, dx, dy);
-    c.style.cssText = L.c.style.cssText; // 保留透明度與顯示狀態
+    c.style.cssText = L.c.style.cssText;
     L.c.remove(); L.c = c; L.ctx = x;
-    // 底圖的 .tf 以畫布中心為基準，中心對齊的改尺寸不需要調整
   });
   guide.hy += dy; guide.v1 += dx; guide.v2 += dx; guide.v3x += dx; guide.v3y += dy;
   setDocSize(w, h); thumbs.clear(); undos = []; redos = [];
   sync(); fit(); sizeUi();
 }
+
+function createNewDoc(w, h, bgWhite = true) {
+  stop3d?.(); endTf?.();
+  layers.forEach(l => { l.c.remove(); dropImg(l); });
+  thumbs.clear();
+  layers = []; n = 0; undos = []; redos = [];
+  setDocSize(w, h);
+  addLayer(bgWhite); // 底層白色背景
+  addLayer(false);   // 圖層 1
+  cur = layers[1];
+  sync(); fit(); sizeUi(); resizeMinimap?.();
+}
+
+async function openImageAsNewDoc(file) {
+  const img = await createImageBitmap(file).catch(() => null);
+  if (!img) return alert('無法讀取這張圖片');
+  const w = Math.min(4096, Math.max(64, img.width));
+  const h = Math.min(4096, Math.max(64, img.height));
+  stop3d?.(); endTf?.();
+  layers.forEach(l => { l.c.remove(); dropImg(l); });
+  thumbs.clear();
+  layers = []; n = 0; undos = []; redos = [];
+  setDocSize(w, h);
+
+  const c0 = Object.assign(document.createElement('canvas'), { width: w, height: h }), ctx0 = c0.getContext('2d');
+  ctx0.drawImage(img, 0, 0, w, h);
+  const L0 = { c: c0, ctx: ctx0, name: '底圖', visible: true, locked: false, bg: true, raw: file, img };
+  layers.push(L0);
+
+  n = 1;
+  const c1 = Object.assign(document.createElement('canvas'), { width: w, height: h }), ctx1 = c1.getContext('2d');
+  const L1 = { c: c1, ctx: ctx1, name: '圖層 1', visible: true, locked: false };
+  layers.push(L1);
+
+  cur = L1;
+  sync(); fit(); sizeUi(); resizeMinimap?.();
+}
+
+function applyPaperPreset(targetW, targetH, presetName) {
+  if (ndMode === 'new') {
+    if (undos.length > 0 || layers.length > 2) {
+      if (!confirm(`確定建立全新 ${presetName}（${targetW}×${targetH}）畫布？\n目前未存檔的筆觸將會清除。`)) return;
+    }
+    createNewDoc(targetW, targetH, true);
+  } else {
+    resizeDoc(targetW, targetH);
+  }
+  closeNewDocModal();
+}
+
+function renderPaperPresets(landscape) {
+  const grid = $('nd-presets-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  PAPER_PRESETS.forEach(p => {
+    let pw = p.w, ph = p.h;
+    if (p.natural !== 'square') {
+      pw = landscape ? Math.max(p.w, p.h) : Math.min(p.w, p.h);
+      ph = landscape ? Math.min(p.w, p.h) : Math.max(p.w, p.h);
+    }
+    const isCur = pw === W && ph === H;
+
+    const card = document.createElement('div');
+    card.className = 'nd-card' + (isCur ? ' active' : '');
+    card.title = `點擊套用：${p.name} ${pw}×${ph} px`;
+
+    // 依長寬比精準計算縮圖矩形
+    const maxW = 54, maxH = 44;
+    let rw, rh;
+    if (pw >= ph) {
+      rw = maxW;
+      rh = Math.max(14, Math.round(maxW * (ph / pw)));
+    } else {
+      rh = maxH;
+      rw = Math.max(14, Math.round(maxH * (pw / ph)));
+    }
+
+    const dimLabel = landscape && p.natural === 'portrait' && p.tag.includes('×')
+      ? p.tag.split('×').map(s => s.trim()).reverse().join(' × ')
+      : p.tag;
+
+    card.innerHTML = `
+      <div class="nd-thumb-box">
+        <div class="nd-thumb-rect" style="width:${rw}px;height:${rh}px"></div>
+      </div>
+      <div class="nd-card-name">${p.name}</div>
+      <div class="nd-card-dim">${dimLabel}</div>
+    `;
+    card.onclick = () => applyPaperPreset(pw, ph, p.name);
+    grid.appendChild(card);
+  });
+
+  // 自訂尺寸卡片
+  const custCard = document.createElement('div');
+  custCard.className = 'nd-card custom';
+  custCard.title = '點擊自訂畫布長寬尺寸';
+  custCard.innerHTML = `
+    <div class="nd-thumb-box">
+      <div class="nd-custom-icon">+</div>
+    </div>
+    <div class="nd-card-name">Custom Size</div>
+    <div class="nd-card-dim">自訂尺寸</div>
+  `;
+  custCard.onclick = () => {
+    const cp = $('nd-custom-panel');
+    const mp = $('nd-more-panel');
+    if (mp) mp.style.display = 'none';
+    if (cp) {
+      const open = cp.style.display !== 'none';
+      cp.style.display = open ? 'none' : 'block';
+      if (!open) { $('nd-cust-w').focus(); $('nd-cust-w').select(); }
+    }
+  };
+  grid.appendChild(custCard);
+
+  // 更多規格卡片
+  const moreCard = document.createElement('div');
+  moreCard.className = 'nd-card';
+  moreCard.title = '更多紙張與螢幕規格';
+  moreCard.innerHTML = `
+    <div class="nd-thumb-box">
+      <div class="nd-more-icon">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8">
+          <rect x="7" y="7" width="13" height="13" rx="2" ry="2"/>
+          <path d="M4 17V4a2 2 0 0 1 2-2h13"/>
+        </svg>
+      </div>
+    </div>
+    <div class="nd-card-name">More Presets</div>
+    <div class="nd-card-dim">更多規格</div>
+  `;
+  moreCard.onclick = () => {
+    const cp = $('nd-custom-panel');
+    const mp = $('nd-more-panel');
+    if (cp) cp.style.display = 'none';
+    if (mp) {
+      const open = mp.style.display !== 'none';
+      mp.style.display = open ? 'none' : 'block';
+      if (!open) renderMorePaperPresets();
+    }
+  };
+  grid.appendChild(moreCard);
+}
+
+function renderMorePaperPresets() {
+  const mgrid = $('nd-more-grid');
+  if (!mgrid) return;
+  mgrid.innerHTML = '';
+  MORE_PAPER_PRESETS.forEach(p => {
+    let pw = ndIsLandscape ? Math.max(p.w, p.h) : Math.min(p.w, p.h);
+    let ph = ndIsLandscape ? Math.min(p.w, p.h) : Math.max(p.w, p.h);
+    const item = document.createElement('div');
+    item.className = 'nd-more-item';
+    item.innerHTML = `
+      <div class="nd-more-item-name">${p.name}</div>
+      <div class="nd-more-item-dim">${pw} × ${ph} (${p.desc})</div>
+    `;
+    item.onclick = () => applyPaperPreset(pw, ph, p.name);
+    mgrid.appendChild(item);
+  });
+}
+
+function openNewDocModal() {
+  const m = $('new-doc-modal');
+  if (!m) return;
+  ndIsLandscape = W > H;
+  $('nd-ori-portrait').classList.toggle('active', !ndIsLandscape);
+  $('nd-ori-landscape').classList.toggle('active', ndIsLandscape);
+  $('nd-cust-w').value = W;
+  $('nd-cust-h').value = H;
+  const cp = $('nd-custom-panel'); if (cp) cp.style.display = 'none';
+  const mp = $('nd-more-panel'); if (mp) mp.style.display = 'none';
+  renderPaperPresets(ndIsLandscape);
+  sizeUi();
+  m.style.display = 'flex';
+}
+
+function closeNewDocModal() {
+  const m = $('new-doc-modal');
+  if (m) m.style.display = 'none';
+}
+
+// 綁定新畫布對話框操作
+$('btn-new-doc').onclick = openNewDocModal;
+$('btn-paper-select').onclick = openNewDocModal;
+$('nd-backdrop').onclick = closeNewDocModal;
+$('nd-btn-close').onclick = closeNewDocModal;
+$('nd-dot-close').onclick = closeNewDocModal;
+$('nd-dot-min').onclick = closeNewDocModal;
+
+$('nd-tab-new').onclick = () => {
+  $('nd-tab-new').classList.add('active');
+  $('nd-tab-open').classList.remove('active');
+  $('nd-tab-imp').classList.remove('active');
+};
+$('nd-tab-open').onclick = () => { closeNewDocModal(); $('pfile').click(); };
+$('nd-tab-imp').onclick = () => { closeNewDocModal(); $('impf').click(); };
+
+$('nd-ori-portrait').onclick = () => {
+  ndIsLandscape = false;
+  $('nd-ori-portrait').classList.add('active');
+  $('nd-ori-landscape').classList.remove('active');
+  renderPaperPresets(false);
+  if ($('nd-more-panel').style.display !== 'none') renderMorePaperPresets();
+};
+$('nd-ori-landscape').onclick = () => {
+  ndIsLandscape = true;
+  $('nd-ori-portrait').classList.remove('active');
+  $('nd-ori-landscape').classList.add('active');
+  renderPaperPresets(true);
+  if ($('nd-more-panel').style.display !== 'none') renderMorePaperPresets();
+};
+
+$('nd-mode-new').onclick = () => {
+  ndMode = 'new';
+  $('nd-mode-new').classList.add('active');
+  $('nd-mode-resize').classList.remove('active');
+};
+$('nd-mode-resize').onclick = () => {
+  ndMode = 'resize';
+  $('nd-mode-resize').classList.add('active');
+  $('nd-mode-new').classList.remove('active');
+};
+
+$('nd-cust-apply').onclick = () => {
+  const w = Math.min(4096, Math.max(64, parseInt($('nd-cust-w').value, 10) || 1200));
+  const h = Math.min(4096, Math.max(64, parseInt($('nd-cust-h').value, 10) || 1600));
+  applyPaperPreset(w, h, '自訂尺寸');
+};
+$('nd-cust-cancel').onclick = () => {
+  $('nd-custom-panel').style.display = 'none';
+};
+
+// 拖曳上傳與檔案選擇
+const dz = $('nd-dropzone');
+$('nd-dz-browse').onclick = e => {
+  e.stopPropagation();
+  $('impf').click();
+  closeNewDocModal();
+};
+dz.onclick = () => {
+  $('impf').click();
+  closeNewDocModal();
+};
+dz.ondragover = e => {
+  e.preventDefault();
+  dz.classList.add('dragover');
+};
+dz.ondragleave = () => dz.classList.remove('dragover');
+dz.ondrop = async e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!file) return;
+  if (file.name.endsWith('.lpaint')) {
+    try {
+      await openProject(file);
+      closeNewDocModal();
+    } catch (err) {
+      alert('無法開啟專案：' + err.message);
+    }
+  } else if (file.type.startsWith('image/')) {
+    try {
+      await openImageAsNewDoc(file);
+      closeNewDocModal();
+    } catch (err) {
+      alert('無法讀取圖片：' + err.message);
+    }
+  } else {
+    alert('請拖曳圖片檔 (PNG/JPEG/WebP) 或 .lpaint 專案檔');
+  }
+};
+
 $('vsize').onchange = e => {
   const val = e.target.value;
   if (val === 'cur') return;
   if (val === 'custom') {
-    const t = prompt('輸入版面寬×高（像素，64～4096）', `${W}×${H}`);
-    const m = t && t.match(/(\d+)\D+(\d+)/);
-    if (!m) return sizeUi();
-    const c = v => Math.min(4096, Math.max(64, +v));
-    return resizeDoc(c(m[1]), c(m[2]));
+    openNewDocModal();
+    $('nd-custom-panel').style.display = 'block';
+    return;
   }
   const [a, b] = val.split(',').map(Number);
-  W > H ? resizeDoc(b, a) : resizeDoc(a, b); // 沿用目前方向
+  W > H ? resizeDoc(b, a) : resizeDoc(a, b);
 };
 $('vori').onclick = () => resizeDoc(H, W);
 
