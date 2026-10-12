@@ -55,22 +55,19 @@ const stagePtToCanvas = (sx, sy) => {
   return [(x * c + y * s) / v.s, (-x * s + y * c) / v.s];
 };
 function getFitScale() {
-  const side = document.body.classList.contains('hideui') ? 0 : document.querySelector('aside').offsetWidth;
-  const w = stage.clientWidth - side, h = stage.clientHeight;
-  return Math.min((w - 32) / W, (h - 32) / H, 2);
+  const w = stage.clientWidth, h = stage.clientHeight;
+  return Math.min((w - 40) / W, (h - 40) / H, 2);
 }
 function fit() {
-  const side = document.body.classList.contains('hideui') ? 0 : document.querySelector('aside').offsetWidth;
-  const w = stage.clientWidth - side, h = stage.clientHeight;
+  const w = stage.clientWidth, h = stage.clientHeight;
   v.s = getFitScale(); v.r = 0;
   v.x = (w - W * v.s) / 2; v.y = (h - H * v.s) / 2; apply();
 }
 // 縮放到指定比例，保持 clientX, clientY（預設可視區域中心）不動
 function zoomTo(targetScale, clientX, clientY) {
   if (clientX == null || clientY == null) {
-    const side = document.body.classList.contains('hideui') ? 0 : document.querySelector('aside').offsetWidth;
     const r = stageRect();
-    clientX = r.left + (stage.clientWidth - side) / 2;
+    clientX = r.left + stage.clientWidth / 2;
     clientY = r.top + stage.clientHeight / 2;
   }
   const s = Math.min(16, Math.max(0.02, targetScale));
@@ -261,7 +258,11 @@ const dropImg = L => { if (L && L.img) { L.img.close(); L.img = null; } if (L) L
 const forget = L => { thumbs.delete(L); dropImg(L); };
 function list(...dirty) {
   const d = new Set(dirty);
-  $('lalpha').value = (cur.c.style.opacity || 1) * 100;
+  if ($('lalpha')) $('lalpha').value = (cur.c.style.opacity || 1) * 100;
+  if ($('lalpha-val')) $('lalpha-val').textContent = Math.round((cur.c.style.opacity || 1) * 100) + '%';
+  if ($('lblend')) $('lblend').value = cur.c.style.mixBlendMode || 'normal';
+  if ($('layer-count-badge')) $('layer-count-badge').textContent = `${layers.length} 個圖層`;
+
   $('list').replaceChildren(...[...layers].reverse().map(l => {
     const row = document.createElement('div');
     row.className = 'layer' + (l === cur ? ' sel' : '') + (l.locked ? ' lock' : '');
@@ -269,19 +270,31 @@ function list(...dirty) {
     if (!th) { th = Object.assign(document.createElement('canvas'), { width: TW, height: TH }); thumbs.set(l, th); d.add(l); }
     if (d.has(l)) { const tc = th.getContext('2d'); tc.clearRect(0, 0, TW, TH); tc.drawImage(l.c, 0, 0, TW, TH); }
     th.style.width = TW + 'px'; th.style.height = TH + 'px';
-    const eye = document.createElement('button'); eye.textContent = l.visible ? '顯示' : '隱藏'; eye.setAttribute('aria-pressed', l.visible);
-    eye.title = l.visible ? '隱藏這一層' : '顯示這一層'; eye.disabled = !!stop3d;
+
+    const eye = document.createElement('button');
+    eye.className = 'lvis' + (l.visible ? '' : ' off');
+    eye.textContent = l.visible ? '👁️' : '👁️‍🗨️';
+    eye.setAttribute('aria-pressed', l.visible);
+    eye.title = l.visible ? '隱藏這一層' : '顯示這一層';
+    eye.disabled = !!stop3d;
     eye.onclick = e => { e.stopPropagation(); l.visible = !l.visible; l.c.style.display = l.visible ? '' : 'none'; list(); };
+
     // 鎖定：保護圖層不被畫到、擦到、清空、變形、合併、刪除
-    const lk = document.createElement('button'); lk.textContent = l.locked ? '🔒' : '🔓';
-    lk.title = l.locked ? '解除鎖定' : '鎖定（保護）這一層'; lk.setAttribute('aria-pressed', !!l.locked);
+    const lk = document.createElement('button');
+    lk.className = 'llock' + (l.locked ? ' on' : '');
+    lk.textContent = l.locked ? '🔒' : '🔓';
+    lk.title = l.locked ? '解除鎖定' : '鎖定（保護）這一層';
+    lk.setAttribute('aria-pressed', !!l.locked);
     lk.onclick = e => { e.stopPropagation(); l.locked = !l.locked; list(); };
+
     const rm = document.createElement('button'); rm.textContent = '✕'; rm.title = '刪除這一層';
     rm.disabled = layers.length < 2 || !!stop3d;
     rm.onclick = e => { e.stopPropagation(); delLayer(l); };
+
     const nm = document.createElement('span'); nm.textContent = l.name; nm.title = '雙擊重新命名';
     nm.ondblclick = () => { const t = prompt('圖層名稱', l.name); if (t) { l.name = t; list(); } };
-    row.append(th, nm, eye, lk, rm);
+
+    row.append(eye, th, nm, lk, rm);
     row.onclick = () => { cur = l; list(); };
     return row;
   }));
@@ -1399,6 +1412,7 @@ function updateZoomUi() {
   $('vdetail').classList.toggle('on', !isFit && isDetail);
 
   const pct = Math.round(v.s * 100) + '%';
+  const opt = Array.from(zsel.options).find(o => o.value !== 'fit' && o.value !== 'cur' && Math.abs(+o.value - v.s) < 0.04);
   if (isFit) {
     curZoomOpt.remove();
     const fitOpt = zsel.querySelector('option[value="fit"]');
@@ -1415,6 +1429,18 @@ function updateZoomUi() {
   }
   zsel.title = `目前顯示比例 ${pct}`;
   if ($('mmzoom')) $('mmzoom').textContent = pct;
+
+  // 同步導航器面板 (Navigator) 控制項
+  if ($('nav-zval')) $('nav-zval').textContent = pct;
+  if ($('nav-zslider')) $('nav-zslider').value = Math.min(800, Math.max(10, Math.round(v.s * 100)));
+  if ($('nav-fit')) $('nav-fit').classList.toggle('on', isFit);
+  if ($('nav-100')) $('nav-100').classList.toggle('on', !isFit && Math.abs(v.s - 1.0) < 0.04);
+  if ($('nav-150')) $('nav-150').classList.toggle('on', !isFit && Math.abs(v.s - 1.5) < 0.04);
+  if ($('nav-200')) $('nav-200').classList.toggle('on', !isFit && Math.abs(v.s - 2.0) < 0.04);
+
+  // 同步頂部標籤列快速縮放按鈕
+  if ($('tab-vfit')) $('tab-vfit').classList.toggle('on', isFit);
+  if ($('tab-v100')) $('tab-v100').classList.toggle('on', !isFit && Math.abs(v.s - 1.0) < 0.04);
 }
 
 zsel.onchange = e => {
@@ -1459,14 +1485,35 @@ addEventListener('keydown', e => {
       }
       if (eraser) {
         e.preventDefault();
+        cancelEraserAutoRevert();
         setEraser(false);
       }
     } else if (e.key === 'b' || e.key === 'B') {
       e.preventDefault();
+      cancelEraserAutoRevert();
       setEraser(false);
     } else if (e.key === 'e' || e.key === 'E') {
       e.preventDefault();
+      cancelEraserAutoRevert();
       setEraser(!eraser);
+    } else if (e.key === 'v' || e.key === 'V') {
+      e.preventDefault();
+      $('tfm').click();
+    } else if (e.key === 'i' || e.key === 'I') {
+      e.preventDefault();
+      $('pick').click();
+    } else if (e.key === 'h' || e.key === 'H') {
+      e.preventDefault();
+      fit();
+    } else if (e.key === 'z' || e.key === 'Z') {
+      e.preventDefault();
+      zoomDetail(1.0);
+    } else if (e.key === 'x' || e.key === 'X') {
+      e.preventDefault();
+      swapColors();
+    } else if (e.key === 'd' || e.key === 'D') {
+      e.preventDefault();
+      resetColors();
     }
   }
 });
@@ -1475,7 +1522,7 @@ addEventListener('keydown', e => {
 let mmW = 120, mmH = 160;
 mmcv = $('mmcv'); mmview = $('mmview'); mmbox = $('mmbox');
 function resizeMinimap() {
-  const MAX = 140;
+  const MAX = 240;
   if (W >= H) {
     mmW = MAX;
     mmH = Math.max(20, Math.round(MAX * H / W));
@@ -1483,10 +1530,12 @@ function resizeMinimap() {
     mmH = MAX;
     mmW = Math.max(20, Math.round(MAX * W / H));
   }
-  mmbox.style.width = mmW + 'px';
-  mmbox.style.height = mmH + 'px';
-  mmcv.width = mmW; mmcv.height = mmH;
-  mmview.width = mmW; mmview.height = mmH;
+  if (mmbox) {
+    mmbox.style.width = mmW + 'px';
+    mmbox.style.height = mmH + 'px';
+  }
+  if (mmcv) { mmcv.width = mmW; mmcv.height = mmH; }
+  if (mmview) { mmview.width = mmW; mmview.height = mmH; }
   updateMinimapThumb();
   updateMinimapView();
 }
@@ -1511,8 +1560,7 @@ function updateMinimapView() {
   const ctx = mmview.getContext('2d');
   ctx.clearRect(0, 0, mmW, mmH);
 
-  const side = document.body.classList.contains('hideui') ? 0 : document.querySelector('aside').offsetWidth;
-  const vw = stage.clientWidth - side;
+  const vw = stage.clientWidth;
   const vh = stage.clientHeight;
 
   const p1 = stagePtToCanvas(0, 0);
@@ -1568,8 +1616,7 @@ function mmNavigate(e) {
   const cx = (mx / mmW) * W;
   const cy = (my / mmH) * H;
 
-  const side = document.body.classList.contains('hideui') ? 0 : document.querySelector('aside').offsetWidth;
-  const vw = (stage.clientWidth - side) / 2;
+  const vw = stage.clientWidth / 2;
   const vh = stage.clientHeight / 2;
   const c = Math.cos(v.r), s = Math.sin(v.r);
   v.x = vw - (cx * c - cy * s) * v.s;
@@ -1587,21 +1634,35 @@ mmbox.addEventListener('pointercancel', e => { mmDragging = false; });
 
 let mmCollapsed = false;
 try { mmCollapsed = localStorage.getItem('mm_collapse') === '1'; } catch {}
-if (mmCollapsed) $('minimap').classList.add('collapsed');
-$('mmtog').textContent = mmCollapsed ? '▴' : '▾';
-$('mmtog').onclick = () => {
-  mmCollapsed = $('minimap').classList.toggle('collapsed');
+if (mmCollapsed && $('minimap')) $('minimap').classList.add('collapsed');
+if ($('mmtog')) {
   $('mmtog').textContent = mmCollapsed ? '▴' : '▾';
-  try { localStorage.setItem('mm_collapse', mmCollapsed ? '1' : '0'); } catch {}
-  if (!mmCollapsed) { updateMinimapThumb(); updateMinimapView(); }
-};
-$('mmfit').onclick = fit;
+  $('mmtog').onclick = () => {
+    mmCollapsed = $('minimap')?.classList.toggle('collapsed');
+    $('mmtog').textContent = mmCollapsed ? '▴' : '▾';
+    try { localStorage.setItem('mm_collapse', mmCollapsed ? '1' : '0'); } catch {}
+    if (!mmCollapsed) { updateMinimapThumb(); updateMinimapView(); }
+  };
+}
+if ($('mmfit')) $('mmfit').onclick = fit;
+
 // 工具列一次只亮一個：變形或滴管進行中時，筆刷/橡皮擦先暗下來
 function toolUi() {
   const busy = tf || picking;
   $('brush').classList.toggle('on', !busy && !eraser); $('eraser').classList.toggle('on', !busy && eraser);
   $('tfm').classList.toggle('on', !!tf); $('pick').classList.toggle('on', picking);
   wrap.style.cursor = eraser && !busy ? 'none' : ''; // 用範圍圈取代十字游標
+
+  // 左側垂直工具列 (Left Toolbar) 同步
+  if ($('lt-brush')) $('lt-brush').classList.toggle('on', !busy && !eraser);
+  if ($('lt-eraser')) $('lt-eraser').classList.toggle('on', !busy && eraser);
+  if ($('lt-tfm')) $('lt-tfm').classList.toggle('on', !!tf);
+  if ($('lt-pick')) $('lt-pick').classList.toggle('on', picking);
+
+  // 雙色票切換方塊同步
+  if ($('lt-swatch-fg')) $('lt-swatch-fg').style.backgroundColor = $('color').value;
+  if ($('lt-swatch-bg')) $('lt-swatch-bg').style.backgroundColor = (typeof ltBgColor !== 'undefined' ? ltBgColor : '#ffffff');
+  if ($('lt-color-picker')) $('lt-color-picker').value = $('color').value;
 
   if ($('tool-title')) $('tool-title').textContent = eraser ? '橡皮擦設定' : '筆刷設定';
   if ($('tool-badge')) {
@@ -2022,7 +2083,12 @@ const download = (blob, name) => {
 };
 $('save').onclick = () => {
   const o = Object.assign(document.createElement('canvas'), { width: W, height: H }), x = o.getContext('2d');
-  layers.filter(l => l.visible).forEach(l => { x.globalAlpha = l.c.style.opacity || 1; x.drawImage(l.c, 0, 0); });
+  layers.filter(l => l.visible).forEach(l => {
+    x.globalAlpha = l.c.style.opacity || 1;
+    x.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    x.drawImage(l.c, 0, 0);
+  });
+  x.globalCompositeOperation = 'source-over';
   // toBlob 直接產生二進位，不必先組出數 MB 的 base64 字串
   o.toBlob(b => b && download(b, 'drawing.png'), 'image/png');
 };
@@ -2036,6 +2102,7 @@ function setDocSize(w, h) {
   [snapC, rdC, tmp, pred].forEach(c => { c.width = w; c.height = h; });
   wrap.style.width = w + 'px'; wrap.style.height = h + 'px';
   resizeMinimap?.();
+  if ($('doc-tab-title')) $('doc-tab-title').textContent = `未命名-1 · ${W}×${H}`;
 }
 async function saveProject() {
   // 原始底圖存「匯入時那個檔案本身的位元組」，不是重新編碼：一張照片轉 PNG 會膨脹好幾倍，
@@ -2169,6 +2236,10 @@ function sizeUi() {
   }
   const curSt = $('nd-cur-status');
   if (curSt) curSt.textContent = `目前畫布：${W} × ${H} px (${W === H ? '方形' : W > H ? '橫式' : '直式'})`;
+  if ($('doc-tab-title')) {
+    const match = PAPER_PRESETS.find(p => Math.min(p.w, p.h) === a && Math.max(p.w, p.h) === b);
+    $('doc-tab-title').textContent = (match ? `${match.name} · ` : '未命名-1 · ') + `${W}×${H}`;
+  }
 }
 
 function resizeDoc(w, h) {
@@ -2627,3 +2698,126 @@ function initIpadSettings() {
 
 initIpadQuickBar();
 initIpadSettings();
+
+// --- Photon Studio 專業三欄工作區互動綁定 ---
+let ltBgColor = '#ffffff';
+
+function swapColors() {
+  const fg = $('color').value;
+  $('color').value = ltBgColor;
+  ltBgColor = fg;
+  toolUi();
+  updateStudioSwatchesActive();
+}
+
+function resetColors() {
+  $('color').value = '#1a1a1a';
+  ltBgColor = '#ffffff';
+  toolUi();
+  updateStudioSwatchesActive();
+}
+
+const STUDIO_SWATCHES = [
+  '#ffffff', '#e5e7eb', '#d1d5db', '#9ca3af', '#6b7280', '#4b5563', '#1f2937', '#000000',
+  '#ef4444', '#f97316', '#f59e0b', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#ec4899',
+  '#fca5a5', '#fdba74', '#fde047', '#a7f3d0', '#bae6fd', '#c7d2fe', '#78350f', '#831843'
+];
+
+function initStudioSwatches() {
+  const container = $('studio-swatches');
+  if (!container) return;
+  container.innerHTML = '';
+  STUDIO_SWATCHES.forEach(hex => {
+    const sw = document.createElement('div');
+    sw.className = 'studio-swatch';
+    sw.style.backgroundColor = hex;
+    sw.dataset.hex = hex.toLowerCase();
+    sw.title = hex;
+    sw.onclick = () => {
+      $('color').value = hex;
+      if (eraser) {
+        cancelEraserAutoRevert();
+        setEraser(false);
+      }
+      toolUi();
+      updateStudioSwatchesActive();
+    };
+    container.appendChild(sw);
+  });
+  updateStudioSwatchesActive();
+}
+
+function updateStudioSwatchesActive() {
+  const cur = ($('color').value || '').toLowerCase();
+  document.querySelectorAll('.studio-swatch').forEach(sw => {
+    sw.classList.toggle('active', sw.dataset.hex === cur);
+  });
+}
+
+function initStudioWorkspace() {
+  // 1. 左側垂直工具列
+  if ($('lt-tfm')) $('lt-tfm').onclick = () => $('tfm').click();
+  if ($('lt-brush')) $('lt-brush').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
+  if ($('lt-eraser')) $('lt-eraser').onclick = () => { cancelEraserAutoRevert(); setEraser(!eraser); };
+  if ($('lt-pick')) $('lt-pick').onclick = () => $('pick').click();
+  if ($('lt-pan')) $('lt-pan').onclick = () => fit();
+  if ($('lt-zoom')) $('lt-zoom').onclick = () => zoomDetail(1.0);
+  if ($('lt-swatch-swap')) $('lt-swatch-swap').onclick = swapColors;
+  if ($('lt-swatch-reset')) $('lt-swatch-reset').onclick = resetColors;
+  if ($('lt-color-picker')) {
+    $('lt-color-picker').oninput = e => {
+      $('color').value = e.target.value;
+      toolUi();
+      updateStudioSwatchesActive();
+    };
+  }
+
+  // 2. 畫布標籤列
+  if ($('doc-active-tab')) {
+    $('doc-active-tab').onclick = e => {
+      if (e.target.id === 'doc-tab-new-btn') return;
+      openNewDocModal?.();
+    };
+  }
+  if ($('doc-tab-new-btn')) {
+    $('doc-tab-new-btn').onclick = e => {
+      e.stopPropagation();
+      openNewDocModal?.();
+    };
+  }
+  if ($('tab-vfit')) $('tab-vfit').onclick = fit;
+  if ($('tab-v100')) $('tab-v100').onclick = () => zoomDetail(1.0);
+
+  // 3. 導航器 (Navigator)
+  if ($('nav-zout')) $('nav-zout').onclick = () => $('zout').click();
+  if ($('nav-zin')) $('nav-zin').onclick = () => $('zin').click();
+  if ($('nav-zslider')) {
+    $('nav-zslider').oninput = e => zoomTo(+e.target.value / 100);
+  }
+  if ($('nav-fit')) $('nav-fit').onclick = fit;
+  if ($('nav-100')) $('nav-100').onclick = () => zoomDetail(1.0);
+  if ($('nav-150')) $('nav-150').onclick = () => zoomTo(1.5);
+  if ($('nav-200')) $('nav-200').onclick = () => zoomTo(2.0);
+
+  // 4. 圖層混合模式
+  if ($('lblend')) {
+    $('lblend').onchange = e => {
+      if (!cur) return;
+      cur.blend = e.target.value;
+      cur.c.style.mixBlendMode = e.target.value;
+    };
+  }
+
+  // 5. 色票矩陣
+  initStudioSwatches();
+  $('color').addEventListener('input', () => {
+    toolUi();
+    updateStudioSwatchesActive();
+  });
+
+  toolUi();
+  resizeMinimap();
+}
+
+initStudioWorkspace();
+

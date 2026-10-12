@@ -175,145 +175,258 @@
     </main>
   </div>
 </div>
-<div id="stage">
-  <div id="wrap"></div>
-  <div id="ipad-quick-bar" class="ipad-quick-bar" title="iPad 快速滑桿">
-    <div class="iq-slider" id="iq-size-wrap" title="上下拖曳調整筆刷大小">
-      <div class="iq-track"><div id="iq-size-fill" class="iq-fill"></div><div id="iq-size-thumb" class="iq-thumb"></div></div>
-      <span class="iq-badge" id="iq-size-badge">8</span>
-    </div>
-    <button id="iq-btn-tool" class="iq-btn" type="button" title="點擊切換筆刷／橡皮擦，長按可臨時擦除">✎</button>
-    <div class="iq-slider" id="iq-alpha-wrap" title="上下拖曳調整不透明度">
-      <div class="iq-track"><div id="iq-alpha-fill" class="iq-fill"></div><div id="iq-alpha-thumb" class="iq-thumb"></div></div>
-      <span class="iq-badge" id="iq-alpha-badge">100%</span>
-    </div>
+<div id="doc-tabs-bar" class="doc-tabs-bar">
+  <div class="doc-tab active" id="doc-active-tab" title="目前編輯中畫布 (點擊修改尺寸 ⌘N)">
+    <span class="doc-tab-dot"></span>
+    <span id="doc-tab-title" class="doc-tab-title">未命名-1 * 1200×1600</span>
+    <span class="doc-tab-mode">RGB/8</span>
+    <button id="doc-tab-new-btn" class="doc-tab-btn" title="開新畫布 (⌘N)">+</button>
+  </div>
+  <div class="doc-tab-spacer"></div>
+  <div class="doc-tab-tools">
+    <button id="tab-vfit" class="doc-tab-pill on" title="適合畫面">適合畫面</button>
+    <button id="tab-v100" class="doc-tab-pill" title="100% 原寸">100%</button>
   </div>
 </div>
-<div id="minimap" title="導航小地圖">
-  <div class="mm-header">
-    <span>導航小地圖</span>
-    <button id="mmtog" title="收合小地圖" aria-label="收合小地圖">▾</button>
+
+<div id="workspace">
+  <!-- 左側專業垂直工具列 (Photon Studio / Photoshop Palette) -->
+  <nav id="left-toolbar" class="left-toolbar" aria-label="工具箱">
+    <button id="lt-tfm" class="lt-btn" type="button" title="變形移動工具 (V)">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>
+      </svg>
+      <span class="lt-kbd">V</span>
+    </button>
+    <button id="lt-brush" class="lt-btn on" type="button" title="筆刷工具 (B)">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 2l4 4-10 10H8v-4L18 2zM3 21h18"/>
+      </svg>
+      <span class="lt-kbd">B</span>
+    </button>
+    <button id="lt-eraser" class="lt-btn" type="button" title="橡皮擦工具 (E)">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 14l-7 7-9-9 7-7 9 9zM18 13l-5-5"/>
+      </svg>
+      <span class="lt-kbd">E</span>
+    </button>
+    <button id="lt-pick" class="lt-btn" type="button" title="滴管吸色工具 (I)">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 4l6 6-9 9H5v-6l9-9zM19 9l-4-4"/>
+      </svg>
+      <span class="lt-kbd">I</span>
+    </button>
+    <button id="lt-pan" class="lt-btn" type="button" title="抓手平移工具 (H / 空白鍵)">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v7M10 10.5V6a2 2 0 0 0-4 0v8a7 7 0 0 0 14 0v-3a2 2 0 0 0-4 0"/>
+      </svg>
+      <span class="lt-kbd">H</span>
+    </button>
+    <button id="lt-zoom" class="lt-btn" type="button" title="放大鏡縮放 (Z)">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"/>
+        <path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>
+      </svg>
+      <span class="lt-kbd">Z</span>
+    </button>
+    <div class="lt-sep"></div>
+    <!-- 經典前/背景色切換方塊 -->
+    <div class="lt-swatch-box" title="點擊選色，按 X 快速對調前/背景色">
+      <div id="lt-swatch-bg" class="lt-swatch-bg" title="背景色"></div>
+      <div id="lt-swatch-fg" class="lt-swatch-fg" title="前景色 (繪圖色)">
+        <input id="lt-color-picker" type="color" value="#222222" class="lt-color-input" title="選取前景色">
+      </div>
+      <button id="lt-swatch-swap" class="lt-swatch-swap" type="button" title="對調前/背景色 (快捷鍵 X)">⇄</button>
+      <button id="lt-swatch-reset" class="lt-swatch-reset" type="button" title="恢復預設黑白色 (快捷鍵 D)">◩</button>
+    </div>
+  </nav>
+
+  <!-- 中央畫布 (暗色微細點陣工作桌) -->
+  <div id="stage">
+    <div id="wrap"></div>
+    <div id="ipad-quick-bar" class="ipad-quick-bar" title="iPad 快速滑桿">
+      <div class="iq-slider" id="iq-size-wrap" title="上下拖曳調整筆刷大小">
+        <div class="iq-track"><div id="iq-size-fill" class="iq-fill"></div><div id="iq-size-thumb" class="iq-thumb"></div></div>
+        <span class="iq-badge" id="iq-size-badge">8</span>
+      </div>
+      <button id="iq-btn-tool" class="iq-btn" type="button" title="點擊切換筆刷／橡皮擦，長按可臨時擦除">✎</button>
+      <div class="iq-slider" id="iq-alpha-wrap" title="上下拖曳調整不透明度">
+        <div class="iq-track"><div id="iq-alpha-fill" class="iq-fill"></div><div id="iq-alpha-thumb" class="iq-thumb"></div></div>
+        <span class="iq-badge" id="iq-alpha-badge">100%</span>
+      </div>
+    </div>
   </div>
-  <div id="mmbody">
-    <div id="mmbox">
-      <canvas id="mmcv"></canvas>
-      <canvas id="mmview"></canvas>
-    </div>
-    <div class="mm-footer">
-      <span id="mmzoom">100%</span>
-      <button id="mmfit" title="整體視野">全貌</button>
-    </div>
+
+  <div id="tfbar" style="display:none;flex-direction:column;gap:8px">
+    <label>縮放 <input id="tfs" type="range" min="5" max="400" value="100"></label>
+    <label>旋轉 <input id="tfr" type="range" min="-180" max="180" value="0"></label>
+    <div class="row"><button id="tfflip">水平翻轉</button><button id="tfreset">重置</button><button id="tfok" class="on">完成</button></div>
+    <span class="hint">拖曳移動，兩指捏合可縮放與旋轉</span>
   </div>
-</div>
-<div id="tfbar" style="display:none;flex-direction:column;gap:8px">
-  <label>縮放 <input id="tfs" type="range" min="5" max="400" value="100"></label>
-  <label>旋轉 <input id="tfr" type="range" min="-180" max="180" value="0"></label>
-  <div class="row"><button id="tfflip">水平翻轉</button><button id="tfreset">重置</button><button id="tfok" class="on">完成</button></div>
-  <span class="hint">拖曳移動，兩指捏合可縮放與旋轉</span>
-</div>
-<aside>
-  <section class="grp" id="sec-tool">
-    <div class="tool-title-row">
-      <h2 id="tool-title">筆刷設定</h2>
-      <span id="tool-badge" class="tool-badge">筆刷</span>
-    </div>
-    <div id="eraser-banner" class="eraser-banner" style="display:none">
-      <div class="eb-top">
-        <div class="eb-msg">
-          <span class="eb-dot"></span>
-          <span>橡皮擦模式中</span>
+
+  <!-- 右側 Studio 專業控制面板 (Navigator + Swatches/Brushes + Layers) -->
+  <aside id="dock">
+    <!-- 1. 導航器 (Navigator) -->
+    <section class="grp panel-dock" id="sec-navigator">
+      <div class="panel-header">
+        <span class="panel-title">導航器 (Navigator)</span>
+        <div class="panel-tabs"><span class="panel-tab on">視角</span></div>
+      </div>
+      <div id="mmbox" class="nav-mmbox" title="點擊或拖曳平移視野">
+        <canvas id="mmcv"></canvas>
+        <canvas id="mmview"></canvas>
+      </div>
+      <div class="nav-controls">
+        <div class="nav-zoom-row">
+          <button id="nav-zout" class="icon" title="縮小 (Ctrl −)">−</button>
+          <input id="nav-zslider" type="range" min="10" max="800" value="100" title="縮放比例">
+          <button id="nav-zin" class="icon" title="放大 (Ctrl +)">+</button>
+          <span id="nav-zval" class="nav-zval">100%</span>
         </div>
-        <button id="btn-to-brush" class="btn-to-brush" type="button" title="切換回筆刷 (快捷鍵 B)">切換回筆刷 ✎</button>
-      </div>
-      <div class="eraser-timer-row">
-        <span class="et-label">擦完自動切回筆刷</span>
-        <div class="seg timer-seg" id="eraser-delay-seg">
-          <button data-delay="500" type="button" title="擦完 0.5 秒後切換">0.5秒</button>
-          <button data-delay="1000" type="button" title="擦完 1 秒後切換" class="on">1秒</button>
-          <button data-delay="0" type="button" title="保持橡皮擦，手動切換">關閉</button>
+        <div class="nav-pills">
+          <button id="nav-fit" class="nav-pill on" type="button" title="適合畫面">Fit 適合</button>
+          <button id="nav-100" class="nav-pill" type="button" title="100% 原寸">100%</button>
+          <button id="nav-150" class="nav-pill" type="button" title="150% 放大">150%</button>
+          <button id="nav-200" class="nav-pill" type="button" title="200% 特寫">200%</button>
         </div>
       </div>
-    </div>
-    <div class="brushline"><select id="bsel" aria-label="筆刷"></select><input id="color" type="color" value="#222222" aria-label="顏色"></div>
-    <!-- 鉛筆硬度面板 -->
-    <div id="sub-pencil" class="brush-subpanel">
-      <div class="sub-label">鉛筆硬度</div>
-      <div class="hardness-bar" id="hardness-bar"></div>
-    </div>
-    <!-- 鋼筆筆尖面板 -->
-    <div id="sub-pen" class="brush-subpanel" style="display:none">
-      <div class="sub-label">鋼筆筆尖</div>
-      <div class="nib-bar" id="nib-bar"></div>
-    </div>
-    <!-- 水彩筆刷種類與含水量面板 -->
-    <div id="sub-wc" class="brush-subpanel" style="display:none">
-      <div class="sub-label">水彩筆型</div>
-      <div class="wc-types-bar" id="wc-types-bar"></div>
-      <label style="margin-top:6px;gap:6px">含水量 <input id="wc-wet" type="range" min="15" max="100" value="65"><span id="wc-wet-val">65%</span></label>
-    </div>
-    <!-- 專用多色盒面板（粉蠟筆、Marker、丙烯馬克筆、彩色鉛筆） -->
-    <div id="sub-palette" class="brush-subpanel" style="display:none">
-      <div class="sub-header">
-        <span class="sub-label" id="palette-title">色盒</span>
-        <div class="palette-tabs" id="palette-tabs"></div>
+    </section>
+
+    <!-- 2. 色票庫與筆刷面板 (Swatches & Brushes) -->
+    <section class="grp panel-dock" id="sec-swatches">
+      <div class="panel-header">
+        <span class="panel-title">色票庫 (Swatches)</span>
+        <input id="color" type="color" value="#222222" class="dock-color-dot" title="系統自選調色盤">
       </div>
-      <div class="palette-grid" id="palette-grid"></div>
-    </div>
-    <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
-    <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
-    <label class="check"><input id="qson" type="checkbox" checked> 停筆拉成直線</label>
-    <div class="esoft-row">
-      <label class="check" id="lbl-esoft" title="勾選＝沿用目前筆刷的濃度、紙紋與側鋒去擦，會有顆粒感、也會留下殘影（鉛筆稿的局部減淡很好用）；不勾＝乾淨的硬邊橡皮擦，一筆擦掉">
-        <input id="esoft" type="checkbox"> 橡皮擦保留筆刷質感</label>
-      <button id="btn-esoft-done" type="button" class="btn-subtle" style="display:none" title="完成設定切換回筆刷">返回筆刷</button>
-    </div>
-    <div class="row">
-      <button id="tipimp" title="匯入一張圖當筆尖，例如 remove-bg 切出來的素材">匯入筆尖</button>
-      <button id="tipclr" class="icon" aria-label="清除筆尖" title="清除筆尖" disabled>✕</button>
-    </div>
-    <label class="check"><input id="tipraw" type="checkbox"> 筆尖保留原色</label>
-    <input id="tipf" type="file" accept="image/*" hidden>
-  </section>
+      <!-- 經典 24 色專業色票矩陣 -->
+      <div class="studio-swatches" id="studio-swatches" title="點擊切換顏色"></div>
 
-  <section class="grp">
-    <h2>透視輔助線</h2>
-    <select id="gmode" aria-label="透視輔助線">
-      <option value="0">關閉</option><option value="1">1 點透視</option><option value="2">2 點透視</option><option value="3">3 點透視</option></select>
-    <label>線數 <input id="gn" type="range" min="4" max="48" value="16"></label>
-    <button id="gbake">存成圖層</button>
-  </section>
+      <div class="tool-title-row" style="margin-top:4px">
+        <h2 id="tool-title">筆刷設定</h2>
+        <span id="tool-badge" class="tool-badge">筆刷</span>
+      </div>
+      <div id="eraser-banner" class="eraser-banner" style="display:none">
+        <div class="eb-top">
+          <div class="eb-msg">
+            <span class="eb-dot"></span>
+            <span>橡皮擦模式中</span>
+          </div>
+          <button id="btn-to-brush" class="btn-to-brush" type="button" title="切換回筆刷 (快捷鍵 B)">切換回筆刷 ✎</button>
+        </div>
+        <div class="eraser-timer-row">
+          <span class="et-label">擦完自動切回筆刷</span>
+          <div class="seg timer-seg" id="eraser-delay-seg">
+            <button data-delay="500" type="button" title="擦完 0.5 秒後切換">0.5秒</button>
+            <button data-delay="1000" type="button" title="擦完 1 秒後切換" class="on">1秒</button>
+            <button data-delay="0" type="button" title="保持橡皮擦，手動切換">關閉</button>
+          </div>
+        </div>
+      </div>
+      <div class="brushline"><select id="bsel" aria-label="筆刷"></select></div>
 
-  <section class="grp">
-    <h2>圖層</h2>
-    <div class="row">
-      <button id="add">新增</button><button id="clr">清除</button><button id="del">刪除</button>
-    </div>
-    <div class="row">
-      <button id="up" class="icon" aria-label="上移">▲</button><button id="down" class="icon" aria-label="下移">▼</button><button id="merge">向下合併</button>
-    </div>
-    <label>透明度 <input id="lalpha" type="range" min="0" max="100" value="100"></label>
-    <div id="list"></div>
-  </section>
+      <!-- 鉛筆硬度面板 -->
+      <div id="sub-pencil" class="brush-subpanel">
+        <div class="sub-label">鉛筆硬度</div>
+        <div class="hardness-bar" id="hardness-bar"></div>
+      </div>
+      <!-- 鋼筆筆尖面板 -->
+      <div id="sub-pen" class="brush-subpanel" style="display:none">
+        <div class="sub-label">鋼筆筆尖</div>
+        <div class="nib-bar" id="nib-bar"></div>
+      </div>
+      <!-- 水彩筆刷種類與含水量面板 -->
+      <div id="sub-wc" class="brush-subpanel" style="display:none">
+        <div class="sub-label">水彩筆型</div>
+        <div class="wc-types-bar" id="wc-types-bar"></div>
+        <label style="margin-top:6px;gap:6px">含水量 <input id="wc-wet" type="range" min="15" max="100" value="65"><span id="wc-wet-val">65%</span></label>
+      </div>
+      <!-- 專用多色盒面板（粉蠟筆、Marker、丙烯馬克筆、彩色鉛筆） -->
+      <div id="sub-palette" class="brush-subpanel" style="display:none">
+        <div class="sub-header">
+          <span class="sub-label" id="palette-title">色盒</span>
+          <div class="palette-tabs" id="palette-tabs"></div>
+        </div>
+        <div class="palette-grid" id="palette-grid"></div>
+      </div>
 
-  <section class="grp" id="sec-ipad">
-    <h2>iPad &amp; Apple Pencil</h2>
-    <label class="check" title="開啟時，單指與手掌觸控不畫圖、不平移；畫圖專屬 Apple Pencil，畫布縮放平移限雙指手勢">
-      <input id="palm-reject" type="checkbox" checked> Apple Pencil 專用（防手掌誤觸）
-    </label>
-    <label class="check" title="Apple Pencil 懸浮（M2/M4 iPad）或滑鼠移動時，預先在畫布顯示筆刷形狀與大小">
-      <input id="pencil-hover" type="checkbox" checked> 筆刷懸浮感應預覽 (Hover)
-    </label>
-    <label class="check" title="在畫布左側顯示 Procreate 風格的快速大小／濃度滑桿與筆刷橡皮擦切換鍵">
-      <input id="quick-bar-on" type="checkbox" checked> 側邊快速快捷滑桿
-    </label>
-    <div style="font-size:11px;font-weight:600;color:var(--muted);margin-top:4px">壓感靈敏度</div>
-    <div class="seg" id="pressure-seg" style="width:100%">
-      <button data-curve="0.75" type="button" title="輕柔：輕觸即出大筆觸">輕柔</button>
-      <button data-curve="1.0" type="button" class="on" title="標準：1:1 原生線性壓感">標準</button>
-      <button data-curve="1.35" type="button" title="紮實：需重壓才出大筆觸">紮實</button>
-    </div>
-  </section>
-</aside>
+      <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
+      <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
+      <label class="check"><input id="qson" type="checkbox" checked> 停筆拉成直線</label>
+      <div class="esoft-row">
+        <label class="check" id="lbl-esoft" title="勾選＝沿用目前筆刷的濃度、紙紋與側鋒去擦，會有顆粒感、也會留下殘影；不勾＝乾淨硬邊橡皮擦">
+          <input id="esoft" type="checkbox"> 橡皮擦保留筆刷質感</label>
+        <button id="btn-esoft-done" type="button" class="btn-subtle" style="display:none" title="完成設定切換回筆刷">返回筆刷</button>
+      </div>
+      <div class="row">
+        <button id="tipimp" title="匯入一張圖當筆尖">匯入筆尖</button>
+        <button id="tipclr" class="icon" aria-label="清除筆尖" title="清除筆尖" disabled>✕</button>
+      </div>
+      <label class="check"><input id="tipraw" type="checkbox"> 筆尖保留原色</label>
+      <input id="tipf" type="file" accept="image/*" hidden>
+    </section>
+
+    <!-- 3. 圖層面板 (Layers) -->
+    <section class="grp panel-dock" id="sec-layers">
+      <div class="panel-header">
+        <span class="panel-title">圖層 (Layers)</span>
+        <span id="layer-count-badge" class="layer-badge">2 個圖層</span>
+      </div>
+      <div class="layer-opt-row">
+        <select id="lblend" class="layer-blend-select" title="圖層混合模式">
+          <option value="normal">正常 (Normal)</option>
+          <option value="multiply">色彩增值 (Multiply)</option>
+          <option value="screen">濾色 (Screen)</option>
+          <option value="overlay">重疊 (Overlay)</option>
+          <option value="darken">變暗 (Darken)</option>
+          <option value="lighten">變亮 (Lighten)</option>
+        </select>
+        <label class="layer-alpha-label">不透明度 <input id="lalpha" type="range" min="0" max="100" value="100"><span id="lalpha-val">100%</span></label>
+      </div>
+      <div id="list" class="studio-layer-list"></div>
+      <div class="layer-dock-footer">
+        <button id="add" title="新增圖層">➕ 新增</button>
+        <button id="merge" title="向下合併">⯆ 合併</button>
+        <button id="up" class="icon" title="上移圖層">▲</button>
+        <button id="down" class="icon" title="下移圖層">▼</button>
+        <button id="clr" title="清空圖層內容">⎚ 清除</button>
+        <button id="del" title="刪除選取圖層">🗑️</button>
+      </div>
+    </section>
+
+    <!-- 4. 透視輔助線 (Perspective Guides) -->
+    <section class="grp panel-dock" id="sec-guide">
+      <div class="panel-header">
+        <span class="panel-title">透視輔助線</span>
+      </div>
+      <select id="gmode" aria-label="透視輔助線">
+        <option value="0">關閉</option><option value="1">1 點透視</option><option value="2">2 點透視</option><option value="3">3 點透視</option></select>
+      <label>線數 <input id="gn" type="range" min="4" max="48" value="16"></label>
+      <button id="gbake">存成圖層</button>
+    </section>
+
+    <!-- 5. iPad & Apple Pencil -->
+    <section class="grp panel-dock" id="sec-ipad">
+      <div class="panel-header">
+        <span class="panel-title">iPad &amp; Apple Pencil</span>
+      </div>
+      <label class="check" title="開啟時，單指與手掌觸控不畫圖、不平移；畫圖專屬 Apple Pencil">
+        <input id="palm-reject" type="checkbox" checked> Apple Pencil 專用（防手掌誤觸）
+      </label>
+      <label class="check" title="Apple Pencil 懸浮或滑鼠移動時預覽筆刷大小">
+        <input id="pencil-hover" type="checkbox" checked> 筆刷懸浮感應預覽 (Hover)
+      </label>
+      <label class="check" title="在畫布左側顯示 Procreate 風格的快速滑桿">
+        <input id="quick-bar-on" type="checkbox" checked> 側邊快速快捷滑桿
+      </label>
+      <div style="font-size:11px;font-weight:600;color:var(--muted);margin-top:4px">壓感靈敏度</div>
+      <div class="seg" id="pressure-seg" style="width:100%">
+        <button data-curve="0.75" type="button" title="輕柔：輕觸即出大筆觸">輕柔</button>
+        <button data-curve="1.0" type="button" class="on" title="標準：1:1 原生線性壓感">標準</button>
+        <button data-curve="1.35" type="button" title="紮實：需重壓才出大筆觸">紮實</button>
+      </div>
+    </section>
+  </aside>
+</div>
 <script src="app.js"></script>
 </body>
 </html>
