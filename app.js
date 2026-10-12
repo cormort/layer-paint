@@ -697,6 +697,30 @@ try {
   }
 } catch {}
 
+const ERASER_DELAYS = [1000, 2000, 3000, 5000, 0];
+
+function cycleEraserDelay() {
+  const curIdx = ERASER_DELAYS.indexOf(eraserAutoRevertDelay);
+  const nextIdx = (curIdx + 1) % ERASER_DELAYS.length;
+  setEraserDelay(ERASER_DELAYS[nextIdx]);
+  if (eraser && eraserAutoRevertDelay > 0) scheduleEraserAutoRevert();
+}
+
+function stepEraserDelay(dir) {
+  const delays = [1000, 2000, 3000, 5000];
+  if (eraserAutoRevertDelay === 0) {
+    setEraserDelay(dir > 0 ? 1000 : 5000);
+  } else {
+    let idx = delays.indexOf(eraserAutoRevertDelay);
+    if (idx === -1) idx = 1;
+    let nextIdx = idx + dir;
+    if (nextIdx >= delays.length) nextIdx = delays.length - 1;
+    if (nextIdx < 0) nextIdx = 0;
+    setEraserDelay(delays[nextIdx]);
+  }
+  if (eraser && eraserAutoRevertDelay > 0) scheduleEraserAutoRevert();
+}
+
 function setEraserDelay(ms) {
   eraserAutoRevertDelay = ms;
   try { localStorage.setItem('eraser_delay', String(ms)); } catch {}
@@ -708,6 +732,11 @@ function updateEraserDelayUi() {
   $('eraser-delay-seg')?.querySelectorAll('button').forEach(b => {
     b.classList.toggle('on', +b.dataset.delay === eraserAutoRevertDelay);
   });
+  const badge = $('eraser-delay-badge');
+  if (badge) {
+    badge.textContent = eraserAutoRevertDelay === 0 ? '關閉' : `${eraserAutoRevertDelay / 1000}s`;
+    badge.title = eraserAutoRevertDelay === 0 ? '自動切換已關閉（點擊啟用）' : `擦完 ${eraserAutoRevertDelay / 1000} 秒後切換回筆刷（點擊調整）`;
+  }
 }
 
 function cancelEraserAutoRevert() {
@@ -1954,6 +1983,33 @@ if ($('et-now')) $('et-now').onclick = () => { cancelEraserAutoRevert(); setEras
 $('eraser-delay-seg')?.querySelectorAll('button').forEach(b => {
   b.onclick = () => setEraserDelay(+b.dataset.delay);
 });
+
+const edBadge = $('eraser-delay-badge');
+if (edBadge) {
+  edBadge.onclick = e => {
+    e.stopPropagation();
+    cycleEraserDelay();
+  };
+}
+if ($('et-plus')) {
+  $('et-plus').onclick = e => {
+    e.stopPropagation();
+    stepEraserDelay(1);
+  };
+}
+if ($('et-minus')) {
+  $('et-minus').onclick = e => {
+    e.stopPropagation();
+    stepEraserDelay(-1);
+  };
+}
+if ($('et-text')) {
+  $('et-text').onclick = e => {
+    e.stopPropagation();
+    cycleEraserDelay();
+  };
+}
+
 updateEraserDelayUi();
 $('sec-tool')?.addEventListener('mouseleave', () => {
   if (eraser && eraserAutoRevertDelay > 0 && !last) scheduleEraserAutoRevert();

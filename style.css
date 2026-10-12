@@ -847,6 +847,78 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
 #et-now:hover {
   background: #3b82f6;
 }
+
+/* 橡皮擦按鈕秒數標籤 (點擊快速輪播切換) */
+.eraser-delay-badge {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 1px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  transition: all 0.12s;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.eraser-delay-badge:hover {
+  background: rgba(239, 68, 68, 0.45);
+  color: #fff;
+  transform: scale(1.06);
+}
+#eraser.on .eraser-delay-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Toast 秒數增減 Stepper */
+.et-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 5px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.et-step-btn {
+  width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  padding: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px !important;
+  font-weight: 700;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 0 !important;
+  color: #fff !important;
+  cursor: pointer;
+  transition: background-color 0.12s, transform 0.1s;
+}
+.et-step-btn:hover {
+  background: rgba(255, 255, 255, 0.28) !important;
+  transform: scale(1.1);
+}
+.et-step-btn:active {
+  transform: scale(0.92);
+}
+.et-text-click {
+  cursor: pointer;
+  padding: 0 3px;
+  transition: color 0.12s;
+}
+.et-text-click:hover {
+  color: #93d3e8;
+  text-decoration: underline;
+}
+
 .et-track {
   width: 100%;
   height: 3px;

@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=eraser2">
+  <link rel="stylesheet" href="style.css?v=stepper1">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -45,7 +45,7 @@
   <button id="vori" title="切換直式／橫式">直式</button>
   <span class="spacer"></span>
   <div class="seg">
-    <button id="brush" class="on">筆刷</button><button id="eraser">橡皮擦</button><button id="tfm">變形</button><button id="pick">滴管</button>
+    <button id="brush" class="on">筆刷</button><button id="eraser" title="橡皮擦工具 (E)；點擊秒數標籤可調整倒數時間">橡皮擦<span id="eraser-delay-badge" class="eraser-delay-badge" title="點擊調整切換秒數 (1s/2s/3s/5s/關閉)">2s</span></button><button id="tfm">變形</button><button id="pick">滴管</button>
   </div>
   <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button>
   <span class="sep"></span>
@@ -65,7 +65,11 @@
 <div id="eraser-toast" class="eraser-toast" style="display:none">
   <div class="et-inner">
     <span class="et-icon">⌫</span>
-    <span id="et-text">1.0 秒後切換回筆刷</span>
+    <div class="et-stepper" title="調整自動切換秒數">
+      <button id="et-minus" class="et-step-btn" type="button" title="減少秒數">−</button>
+      <span id="et-text" class="et-text-click" title="點擊快速切換秒數">2.0 秒後切換回筆刷</span>
+      <button id="et-plus" class="et-step-btn" type="button" title="增加秒數">+</button>
+    </div>
     <button id="et-keep" type="button" title="保持橡皮擦模式">保持</button>
     <button id="et-now" type="button" title="立即切換回筆刷">立即切換 ✎</button>
   </div>
@@ -463,6 +467,6 @@
     </section>
   </aside>
 </div>
-<script src="app.js?v=eraser2"></script>
+<script src="app.js?v=stepper1"></script>
 </body>
 </html>
