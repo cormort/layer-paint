@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=mobile1">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -257,6 +257,12 @@
     </div>
   </div>
 
+  <!-- 手機專用懸浮面板展開按鈕 (置於 #workspace 下，不被 #stage 攔截指針) -->
+  <button id="btn-mobile-dock" class="btn-mobile-dock" type="button" title="開啟面板 (圖層/色票/筆刷)" aria-label="開啟面板">
+    <span class="bmd-icon">🎨</span>
+    <span class="bmd-text">圖層·色票</span>
+  </button>
+
   <div id="tfbar" style="display:none;flex-direction:column;gap:8px">
     <label>縮放 <input id="tfs" type="range" min="5" max="400" value="100"></label>
     <label>旋轉 <input id="tfr" type="range" min="-180" max="180" value="0"></label>
@@ -264,8 +270,20 @@
     <span class="hint">拖曳移動，兩指捏合可縮放與旋轉</span>
   </div>
 
+  <!-- 手機抽屜背景遮罩 (點擊收合面板) -->
+  <div id="dock-backdrop" class="dock-backdrop"></div>
+
   <!-- 右側 Studio 專業控制面板 (Navigator + Swatches/Brushes + Layers) -->
   <aside id="dock">
+    <!-- 手機版抽屜頂部標題與關閉按鈕 -->
+    <div class="dock-mobile-header">
+      <div class="dmh-title">
+        <span class="dmh-icon">🎨</span>
+        <span>工作室面板 (圖層·色票·筆刷)</span>
+      </div>
+      <button id="btn-dock-close" class="btn-dock-close" type="button" title="關閉面板" aria-label="關閉面板">✕</button>
+    </div>
+
     <!-- 1. 導航器 (Navigator) -->
     <section class="grp panel-dock" id="sec-navigator">
       <div class="panel-header">
@@ -443,6 +461,6 @@
     </section>
   </aside>
 </div>
-<script src="app.js"></script>
+<script src="app.js?v=mobile1"></script>
 </body>
 </html>

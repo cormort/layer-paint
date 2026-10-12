@@ -1643,3 +1643,198 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
   padding: 0;
 }
 
+/* ========================================================
+   行動裝置／手機端自適應優化 (Mobile Responsive & Drawer Layout)
+   ======================================================== */
+
+/* 1. 預設元素（桌機隱藏手機專用元素） */
+.btn-mobile-dock {
+  display: none;
+}
+.dock-mobile-header {
+  display: none;
+}
+.dock-backdrop {
+  display: none;
+}
+
+/* 2. 手機與窄螢幕斷點 (< 768px 或 行動橫向高度 < 520px) */
+@media (max-width: 768px), (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --aside: 0px !important;
+  }
+
+  /* 覆蓋桌機 hideui display:none，使手機抽屜滑動動效正常生效 */
+  body.hideui aside#dock {
+    display: flex;
+  }
+
+  /* 確保畫布舞台享有 100% 空間，不被側邊欄擠壓 */
+  #stage {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* 手機專用懸浮展開按鈕 */
+  .btn-mobile-dock {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    z-index: 35;
+    background: rgba(22, 23, 27, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 20px;
+    padding: 6px 13px;
+    color: #f4f4f5;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.14s, background-color 0.14s, opacity 0.2s;
+  }
+  .btn-mobile-dock:active {
+    transform: scale(0.95);
+    background: rgba(45, 48, 56, 0.95);
+    border-color: var(--blue);
+  }
+  .btn-mobile-dock .bmd-icon {
+    font-size: 14px;
+    line-height: 1;
+  }
+  .btn-mobile-dock .bmd-text {
+    letter-spacing: 0.02em;
+  }
+
+  /* 面板開啟時，隱藏浮動按鈕避免重疊 */
+  body.dock-open .btn-mobile-dock {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* 手機版半透明遮罩 */
+  .dock-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.52);
+    z-index: 90;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.26s ease;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  body.dock-open .dock-backdrop,
+  .dock-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* 右側工作室面板轉化為浮動抽屜 (Off-canvas Drawer) */
+  aside#dock {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    max-width: 340px;
+    z-index: 100;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.7);
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    background: #17181c;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.28s, opacity 0.28s;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* 當抽屜打開時滑入 */
+  body.dock-open aside#dock,
+  aside#dock.mobile-open {
+    transform: translateX(0);
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* 抽屜頂部標題列與關閉按鈕 */
+  .dock-mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px 10px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 6px;
+    flex: none;
+  }
+  .dmh-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #f4f4f5;
+  }
+  .btn-dock-close {
+    min-height: 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #f4f4f5;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-dock-close:active {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  /* 左側微型垂直工具列優化 */
+  .left-toolbar {
+    width: 42px;
+    padding: 6px 0;
+    gap: 2px;
+  }
+  .lt-btn {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
+  /* iPad 快速雙滑桿縮減比例，避免佔據手機作畫空間 */
+  .ipad-quick-bar {
+    left: 6px;
+    padding: 8px 4px;
+    gap: 8px;
+    transform: translateY(-50%) scale(0.86);
+    transform-origin: left center;
+  }
+
+  /* 頂部工具列手機端緊湊排版 */
+  #topbar {
+    height: 42px;
+    padding: 0 6px;
+    gap: 5px;
+  }
+  #topbar button, #topbar .seg button {
+    font-size: 12px;
+    min-height: 30px;
+    padding: 0 8px;
+  }
+}
+
+

@@ -211,23 +211,88 @@ $('gbake').onclick = () => {
 let gdrag = null;
 let sw = 0, sh = 0;
 // 視窗大小改變（iPad 旋轉、工具列伸縮）時只保持畫面中心，不重設使用者的縮放平移
-addEventListener('resize', () => { const w = stage.clientWidth, h = stage.clientHeight; v.x += (w - sw) / 2; v.y += (h - sh) / 2; sw = w; sh = h; apply(); });
+addEventListener('resize', () => {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  v.x += (w - sw) / 2;
+  v.y += (h - sh) / 2;
+  sw = w;
+  sh = h;
+  if (!isMobileScreen()) {
+    document.body.classList.remove('dock-open');
+    const dk = $('dock');
+    if (dk) dk.classList.remove('mobile-open');
+    const bd = $('dock-backdrop');
+    if (bd) bd.classList.remove('active');
+  }
+  apply();
+});
+
+// 行動裝置/手機版抽屜面板 (Drawer) 判斷
+const isMobileScreen = () => window.innerWidth <= 768 || (window.innerHeight <= 520 && window.innerWidth <= 950);
+
 // 面板收合狀態要在第一次 fit() 之前套用，否則會先用面板展開的寬度算一次再重算
 const UI_HIDE = 'hideui';
 try { if (localStorage.getItem(UI_HIDE) === '1') document.body.classList.add(UI_HIDE); } catch {}
 fit(); sw = stage.clientWidth; sh = stage.clientHeight;
+
+const setMobileDock = (open) => {
+  document.body.classList.toggle('dock-open', open);
+  const dk = $('dock');
+  if (dk) dk.classList.toggle('mobile-open', open);
+  const bd = $('dock-backdrop');
+  if (bd) bd.classList.toggle('active', open);
+  const b = $('uitog');
+  if (b && isMobileScreen()) {
+    b.textContent = open ? '收合 ▶' : '◀ 開啟';
+    b.title = b.ariaLabel = open ? '收合面板' : '開啟面板';
+  }
+};
+
 const setUI = (hide, save) => {
+  if (isMobileScreen()) {
+    setMobileDock(!hide);
+    return;
+  }
   document.body.classList.toggle(UI_HIDE, hide);
   const b = $('uitog');
-  // 面板在右側：展開時按鈕是「收合 ▶」（往右收進去），收起來時是「◀ 開啟」（往左拉出來）
-  b.textContent = hide ? '◀ 開啟' : '收合 ▶';
-  b.title = b.ariaLabel = hide ? '開啟面板' : '收合面板';
-  b.setAttribute('aria-expanded', String(!hide));
-  // 面板是浮動覆蓋層，開合不會改變 stage 尺寸，所以不需要重新 fit()，也不該弄丟使用者的縮放
+  if (b) {
+    b.textContent = hide ? '◀ 開啟' : '收合 ▶';
+    b.title = b.ariaLabel = hide ? '開啟面板' : '收合面板';
+    b.setAttribute('aria-expanded', String(!hide));
+  }
   if (save) { try { localStorage.setItem(UI_HIDE, hide ? '1' : '0'); } catch {} }
 };
-$('uitog').onclick = () => setUI(!document.body.classList.contains(UI_HIDE), true);
-setUI(document.body.classList.contains(UI_HIDE), false); // 讓按鈕文字與實際狀態一致
+
+$('uitog').onclick = () => {
+  if (isMobileScreen()) {
+    const isOpen = document.body.classList.contains('dock-open') || $('dock')?.classList.contains('mobile-open');
+    setMobileDock(!isOpen);
+  } else {
+    setUI(!document.body.classList.contains(UI_HIDE), true);
+  }
+};
+
+const btnMob = $('btn-mobile-dock');
+if (btnMob) {
+  btnMob.addEventListener('pointerdown', e => e.stopPropagation());
+  btnMob.onclick = e => { e.stopPropagation(); setMobileDock(true); };
+}
+const btnDkClose = $('btn-dock-close');
+if (btnDkClose) {
+  btnDkClose.addEventListener('pointerdown', e => e.stopPropagation());
+  btnDkClose.onclick = e => { e.stopPropagation(); setMobileDock(false); };
+}
+const dkBackdrop = $('dock-backdrop');
+if (dkBackdrop) {
+  dkBackdrop.addEventListener('pointerdown', e => { e.stopPropagation(); setMobileDock(false); });
+  dkBackdrop.onclick = e => { e.stopPropagation(); setMobileDock(false); };
+}
+
+if (isMobileScreen()) {
+  setMobileDock(false);
+} else {
+  setUI(document.body.classList.contains(UI_HIDE), false);
+}
 stage.addEventListener('wheel', e => {
   e.preventDefault();
   if (e.ctrlKey || e.metaKey) { zoomV(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01)); apply(); } // 觸控板捏合 / Ctrl+滾輪
