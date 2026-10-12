@@ -542,13 +542,80 @@ try { eraserSoft = localStorage.getItem('esoft') === '1'; $('esoft').checked = e
 $('esoft').onchange = e => { eraserSoft = e.target.checked; try { localStorage.setItem('esoft', eraserSoft ? '1' : '0'); } catch {} };
 const isSoftErase = () => eraser && eraserSoft;
 
+let eraserAutoRevertTimer = null;
+let eraserAutoRevertRaf = null;
+let eraserAutoRevertDelay = 1000; // 預設 1 秒，可切換 500ms (0.5秒) 或 0 (關閉)
+try {
+  const ed = localStorage.getItem('eraser_delay');
+  if (ed !== null) eraserAutoRevertDelay = +ed;
+} catch {}
+
+function setEraserDelay(ms) {
+  eraserAutoRevertDelay = ms;
+  try { localStorage.setItem('eraser_delay', String(ms)); } catch {}
+  updateEraserDelayUi();
+  cancelEraserAutoRevert();
+}
+
+function updateEraserDelayUi() {
+  $('eraser-delay-seg')?.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', +b.dataset.delay === eraserAutoRevertDelay);
+  });
+}
+
+function cancelEraserAutoRevert() {
+  if (eraserAutoRevertTimer) {
+    clearTimeout(eraserAutoRevertTimer);
+    eraserAutoRevertTimer = null;
+  }
+  if (eraserAutoRevertRaf) {
+    cancelAnimationFrame(eraserAutoRevertRaf);
+    eraserAutoRevertRaf = null;
+  }
+  const toast = $('eraser-toast');
+  if (toast) toast.style.display = 'none';
+}
+
+function scheduleEraserAutoRevert() {
+  cancelEraserAutoRevert();
+  if (!eraser || eraserAutoRevertDelay <= 0) return;
+
+  const ms = eraserAutoRevertDelay;
+  const toast = $('eraser-toast');
+  const prog = $('et-progress');
+  const txt = $('et-text');
+  if (toast) {
+    toast.style.display = 'block';
+    if (txt) txt.textContent = (ms / 1000).toFixed(1) + ' 秒後切換回筆刷';
+  }
+
+  const start = performance.now();
+  function tick(now) {
+    const elapsed = now - start;
+    const remain = Math.max(0, ms - elapsed);
+    if (prog) prog.style.transform = `scaleX(${remain / ms})`;
+    if (remain > 0) {
+      eraserAutoRevertRaf = requestAnimationFrame(tick);
+    }
+  }
+  eraserAutoRevertRaf = requestAnimationFrame(tick);
+
+  eraserAutoRevertTimer = setTimeout(() => {
+    eraserAutoRevertTimer = null;
+    cancelEraserAutoRevert();
+    setEraser(false);
+  }, ms);
+}
+
 function setEraser(state) {
+  cancelEraserAutoRevert();
   eraser = !!state;
   if (!eraser) eCur = null;
   toolUi();
   drawECur();
 }
 function ensureBrushMode() {
+  cancelEraserAutoRevert();
   if (eraser) setEraser(false);
 }
 
@@ -1077,6 +1144,7 @@ function cancelStroke() {
 // 預測圖層用完就收起來，平常不佔一個合成層
 const endPred = () => { pctx.clearRect(0, 0, W, H); pred.style.display = 'none'; };
 stage.onpointerdown = e => {
+  cancelEraserAutoRevert();
   sRect = null; // 版面可能在兩次互動之間變動，每次互動重新確認一次
   stage.setPointerCapture(e.pointerId);
   if (tf) { tfPts.set(e.pointerId, [e.clientX, e.clientY]); return; }
@@ -1162,6 +1230,11 @@ function finishStroke() {
   const x = Math.max(0, Math.floor(bb[0])), y = Math.max(0, Math.floor(bb[1])), w = Math.min(W, Math.ceil(bb[2])) - x, h = Math.min(H, Math.ceil(bb[3])) - y;
   if (w > 0 && h > 0) pushUndo({ l: cur, c: crop(snapC, x, y, w, h), x, y });
   list(cur);
+
+  // 橡皮擦擦完一筆後，依設定時間（0.5秒 / 1秒）自動切換回筆刷
+  if (eraser && eraserAutoRevertDelay > 0) {
+    scheduleEraserAutoRevert();
+  }
 }
 // 空白鍵一律當作平移，不要求焦點在 body：否則左鍵點過工具列按鈕後，按空白鍵會「再按一次」
 // 那顆按鈕（例如剛按過「刪除」就再刪一層）。preventDefault 同時擋掉按鈕的空白鍵啟動。
@@ -1421,10 +1494,20 @@ function toolUi() {
   if ($('lbl-esoft')) $('lbl-esoft').classList.toggle('highlight', eraser);
   if ($('btn-esoft-done')) $('btn-esoft-done').style.display = eraser ? 'inline-flex' : 'none';
 }
-$('brush').onclick = () => setEraser(false);
-$('eraser').onclick = () => setEraser(!eraser); // 再次點擊橡皮擦可切換回筆刷
-if ($('btn-to-brush')) $('btn-to-brush').onclick = () => setEraser(false);
-if ($('btn-esoft-done')) $('btn-esoft-done').onclick = () => setEraser(false);
+$('brush').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
+$('eraser').onclick = () => { cancelEraserAutoRevert(); setEraser(!eraser); }; // 再次點擊橡皮擦可切換回筆刷
+if ($('btn-to-brush')) $('btn-to-brush').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
+if ($('btn-esoft-done')) $('btn-esoft-done').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
+if ($('et-keep')) $('et-keep').onclick = () => cancelEraserAutoRevert();
+if ($('et-now')) $('et-now').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
+$('eraser-delay-seg')?.querySelectorAll('button').forEach(b => {
+  b.onclick = () => setEraserDelay(+b.dataset.delay);
+});
+updateEraserDelayUi();
+$('sec-tool')?.addEventListener('mouseleave', () => {
+  if (eraser && eraserAutoRevertDelay > 0 && !last) scheduleEraserAutoRevert();
+});
+$('sec-tool')?.addEventListener('mouseenter', () => cancelEraserAutoRevert());
 $('add').onclick = () => addLayer();
 // 刪除圖層：工具列的「刪除」與圖層列上的 ✕ 共用；鎖定的圖層不給刪
 function delLayer(L) {

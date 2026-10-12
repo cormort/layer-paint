@@ -291,14 +291,19 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
 
 .eraser-banner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 10px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
   margin: 4px 0 6px;
   background: linear-gradient(135deg, rgba(239, 68, 68, .16), rgba(249, 115, 22, .12));
   border: 1px solid rgba(239, 68, 68, .35);
   border-radius: 8px;
+}
+.eb-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .eb-msg {
   display: flex;
@@ -335,6 +340,117 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
 }
 .btn-to-brush:active {
   transform: translateY(0);
+}
+
+.eraser-timer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: #ffc4c4;
+  padding-top: 4px;
+  border-top: 1px solid rgba(239, 68, 68, .2);
+}
+.eraser-timer-row .et-label {
+  white-space: nowrap;
+}
+.timer-seg {
+  display: flex;
+  height: 22px;
+  background: rgba(0, 0, 0, .3);
+  border-radius: 5px;
+  overflow: hidden;
+  padding: 2px;
+  gap: 2px;
+}
+.timer-seg button {
+  min-height: 18px !important;
+  height: 18px;
+  padding: 0 6px !important;
+  font-size: 10px !important;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.timer-seg button:hover {
+  color: #fff;
+}
+.timer-seg button.on {
+  background: #2563eb !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+/* 浮動倒數 Toast 提示 */
+.eraser-toast {
+  position: fixed;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  background: rgba(28, 30, 36, .94);
+  border: 1px solid rgba(239, 68, 68, .5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  border-radius: 18px;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  user-select: none;
+  animation: toastPop .15s ease-out;
+}
+@keyframes toastPop {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.et-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #f1f2f5;
+}
+.et-icon {
+  color: #ff5252;
+  font-weight: bold;
+}
+.et-inner button {
+  min-height: 22px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, .1);
+  color: var(--ink);
+  cursor: pointer;
+}
+.et-inner button:hover {
+  background: rgba(255, 255, 255, .2);
+}
+#et-now {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+#et-now:hover {
+  background: #3b82f6;
+}
+.et-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, .1);
+}
+.et-progress {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff5252, #2563eb);
+  transform-origin: left;
 }
 
 .esoft-row {

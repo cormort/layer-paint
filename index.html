@@ -58,6 +58,15 @@
   <span class="spacer"></span>
   <button id="uitog" aria-label="收合面板"></button>
 </header>
+<div id="eraser-toast" class="eraser-toast" style="display:none">
+  <div class="et-inner">
+    <span class="et-icon">⌫</span>
+    <span id="et-text">1.0 秒後切換回筆刷</span>
+    <button id="et-keep" type="button" title="保持橡皮擦模式">保持</button>
+    <button id="et-now" type="button" title="立即切換回筆刷">立即切換 ✎</button>
+  </div>
+  <div class="et-track"><div id="et-progress" class="et-progress"></div></div>
+</div>
 <div id="stage"><div id="wrap"></div></div>
 <div id="minimap" title="導航小地圖">
   <div class="mm-header">
@@ -88,11 +97,21 @@
       <span id="tool-badge" class="tool-badge">筆刷</span>
     </div>
     <div id="eraser-banner" class="eraser-banner" style="display:none">
-      <div class="eb-msg">
-        <span class="eb-dot"></span>
-        <span>橡皮擦模式中</span>
+      <div class="eb-top">
+        <div class="eb-msg">
+          <span class="eb-dot"></span>
+          <span>橡皮擦模式中</span>
+        </div>
+        <button id="btn-to-brush" class="btn-to-brush" type="button" title="切換回筆刷 (快捷鍵 B)">切換回筆刷 ✎</button>
       </div>
-      <button id="btn-to-brush" class="btn-to-brush" type="button" title="切換回筆刷 (快捷鍵 B)">切換回筆刷 ✎</button>
+      <div class="eraser-timer-row">
+        <span class="et-label">擦完自動切回筆刷</span>
+        <div class="seg timer-seg" id="eraser-delay-seg">
+          <button data-delay="500" type="button" title="擦完 0.5 秒後切換">0.5秒</button>
+          <button data-delay="1000" type="button" title="擦完 1 秒後切換" class="on">1秒</button>
+          <button data-delay="0" type="button" title="保持橡皮擦，手動切換">關閉</button>
+        </div>
+      </div>
     </div>
     <div class="brushline"><select id="bsel" aria-label="筆刷"></select><input id="color" type="color" value="#222222" aria-label="顏色"></div>
     <!-- 鉛筆硬度面板 -->
