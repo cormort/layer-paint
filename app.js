@@ -680,10 +680,21 @@ const isSoftErase = () => eraser && eraserSoft;
 
 let eraserAutoRevertTimer = null;
 let eraserAutoRevertRaf = null;
-let eraserAutoRevertDelay = 1000; // 預設 1 秒，可切換 500ms (0.5秒) 或 0 (關閉)
+let eraserAutoRevertDelay = 2000; // 預設 2.0 秒（更充裕的修飾時間），可切換 1秒 / 2秒 / 3秒 / 5秒 / 關閉
 try {
   const ed = localStorage.getItem('eraser_delay');
-  if (ed !== null) eraserAutoRevertDelay = +ed;
+  if (ed !== null) {
+    const val = +ed;
+    // 若先前存的是舊版快速設定 (0.5秒 或 1.0秒)，升級至 2.0秒 更寬裕的節奏
+    if (val > 0 && val <= 1000) {
+      eraserAutoRevertDelay = 2000;
+      localStorage.setItem('eraser_delay', '2000');
+    } else {
+      eraserAutoRevertDelay = val;
+    }
+  } else {
+    localStorage.setItem('eraser_delay', '2000');
+  }
 } catch {}
 
 function setEraserDelay(ms) {

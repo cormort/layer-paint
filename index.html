@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=mobile1">
+  <link rel="stylesheet" href="style.css?v=eraser2">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -334,8 +334,10 @@
         <div class="eraser-timer-row">
           <span class="et-label">擦完自動切回筆刷</span>
           <div class="seg timer-seg" id="eraser-delay-seg">
-            <button data-delay="500" type="button" title="擦完 0.5 秒後切換">0.5秒</button>
-            <button data-delay="1000" type="button" title="擦完 1 秒後切換" class="on">1秒</button>
+            <button data-delay="1000" type="button" title="快速修飾（1.0 秒後切換）">1秒</button>
+            <button data-delay="2000" type="button" title="標準節奏（2.0 秒後切換，推薦）" class="on">2秒</button>
+            <button data-delay="3000" type="button" title="充裕節奏（3.0 秒後切換）">3秒</button>
+            <button data-delay="5000" type="button" title="悠閒修飾（5.0 秒後切換）">5秒</button>
             <button data-delay="0" type="button" title="保持橡皮擦，手動切換">關閉</button>
           </div>
         </div>
@@ -461,6 +463,6 @@
     </section>
   </aside>
 </div>
-<script src="app.js?v=mobile1"></script>
+<script src="app.js?v=eraser2"></script>
 </body>
 </html>

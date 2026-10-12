@@ -751,6 +751,7 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 6px;
   font-size: 11px;
   color: #ffc4c4;
