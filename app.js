@@ -106,6 +106,7 @@ const overlay = () => {
   stage.append(c); return c;
 };
 const gcv = overlay(), ecv = overlay();
+gcv.id = 'gcv'; ecv.id = 'ecv';
 // 依 DPR 配置覆蓋層；尺寸沒變就只清空
 function prep(cv) {
   const d = devicePixelRatio || 1, [w, h] = stageSize(), bw = Math.round(w * d), bh = Math.round(h * d), c = cv.getContext('2d');
@@ -156,16 +157,52 @@ function drawGuide() {
   }
   drawECur();
 }
-// 橡皮擦範圍圈：深淺兩圈，在白紙和深色筆跡上都看得到；畫在自己的覆蓋層上
+// 筆刷／橡皮擦範圍圈與 Apple Pencil 懸浮感應 (Hover) 預覽
+let hoverCur = null; // [clientX, clientY, rad, tilt, az, isPen]
+let pencilHoverOn = true;
+try { pencilHoverOn = localStorage.getItem('pencil_hover') !== '0'; } catch {}
+
 function drawECur() {
-  const active = !!(eraser && eCur && !tf && !picking);
+  const isE = eraser && eCur;
+  const isH = !eraser && hoverCur && pencilHoverOn && !tf && !picking && !last;
+  const active = !!((isE || isH) && !tf && !picking);
   ecv.style.display = active ? '' : 'none'; // 沒在用就不留一個全螢幕合成層
   if (!active) return;
   const [c, d] = prep(ecv);
-  const r = stageRect(), rad = Math.max(2, eCur[2] * v.s);
-  c.setTransform(d, 0, 0, d, 0, 0); c.lineWidth = 1;
-  c.beginPath(); c.arc(eCur[0] - r.left, eCur[1] - r.top, rad, 0, 6.283); c.strokeStyle = 'rgba(0,0,0,.65)'; c.stroke();
-  c.beginPath(); c.arc(eCur[0] - r.left, eCur[1] - r.top, rad + 1, 0, 6.283); c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke();
+  const r = stageRect();
+  c.setTransform(d, 0, 0, d, 0, 0);
+
+  if (isE) {
+    const rad = Math.max(2, eCur[2] * v.s);
+    const x = eCur[0] - r.left, y = eCur[1] - r.top;
+    c.lineWidth = 1;
+    c.beginPath(); c.arc(x, y, rad, 0, 6.283); c.strokeStyle = 'rgba(0,0,0,.65)'; c.stroke();
+    c.beginPath(); c.arc(x, y, rad + 1, 0, 6.283); c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke();
+  } else if (isH) {
+    const rad = Math.max(2, hoverCur[2] * v.s);
+    const x = hoverCur[0] - r.left, y = hoverCur[1] - r.top;
+    const t = hoverCur[3] || 0;
+    const az = hoverCur[4] || 0;
+    const col = $('color').value;
+
+    c.lineWidth = 1.2;
+    if (t > 0.08) {
+      c.save();
+      c.translate(x, y);
+      c.rotate(az);
+      c.beginPath();
+      c.ellipse(0, 0, rad * (1 + 2.2 * t), rad, 0, 0, 6.283);
+      c.strokeStyle = 'rgba(0,0,0,.5)'; c.stroke();
+      c.beginPath();
+      c.ellipse(0, 0, rad * (1 + 2.2 * t) + 1, rad + 1, 0, 0, 6.283);
+      c.strokeStyle = col; c.stroke();
+      c.restore();
+    } else {
+      c.beginPath(); c.arc(x, y, rad, 0, 6.283); c.strokeStyle = 'rgba(0,0,0,.5)'; c.stroke();
+      c.beginPath(); c.arc(x, y, rad + 1, 0, 6.283); c.strokeStyle = col; c.stroke();
+    }
+    c.beginPath(); c.arc(x, y, 1.5, 0, 6.283); c.fillStyle = col; c.fill();
+  }
 }
 $('gmode').onchange = e => { guide.mode = +e.target.value; drawGuide(); };
 $('gn').oninput = drawGuide;
@@ -627,10 +664,22 @@ $('bsel').onchange = e => {
   updateBrushSubpanels();
 };
 
+let pressureCurve = 1.0; // 壓感曲線 (0.75: 輕柔, 1.0: 標準, 1.35: 紮實)
+try {
+  const pc = localStorage.getItem('pressure_curve');
+  if (pc) pressureCurve = +pc;
+} catch {}
+
+const penPressure = e => {
+  if (e.pointerType !== 'pen') return 0.5;
+  const raw = e.pressure || 0.5;
+  return Math.pow(raw, pressureCurve);
+};
+
 const width = e => {
   const z = +$('size').value;
   const pen = e.pointerType === 'pen';
-  const prs = pen ? e.pressure : 0.5;
+  const prs = pen ? penPressure(e) : 0.5;
   if (B.id === 'pen') {
     const nib = PEN_NIBS[curNib] || PEN_NIBS['F'];
     if (nib.flex) {
@@ -646,8 +695,14 @@ const width = e => {
 };
 
 const tiltOf = e => {
-  const t = e.altitudeAngle != null ? 1 - e.altitudeAngle / (Math.PI / 2) : Math.hypot(e.tiltX || 0, e.tiltY || 0) / 90;
-  return Math.min(1, Math.max(0, (t - .5) / .5));
+  let t;
+  if (e.altitudeAngle != null) {
+    t = 1 - e.altitudeAngle / (Math.PI / 2); // 0 (直立) ~ 1 (貼平)
+  } else {
+    t = Math.hypot(e.tiltX || 0, e.tiltY || 0) / 90;
+  }
+  // Apple Pencil 從 ~55度 (t > 0.35) 起平滑過渡到側鋒素描
+  return Math.min(1, Math.max(0, (t - .35) / .55));
 };
 
 // 紋理生成
@@ -1027,13 +1082,23 @@ function stamp(c, col, x, y, r, a) {
       return;
     }
     c.fillStyle = wcGrain(col);
-    c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
-    if (wcWetness > 0.35) {
-      c.strokeStyle = col;
-      c.globalAlpha = a * 0.35 * wcWetness;
-      c.lineWidth = Math.max(1, r * 0.12);
-      c.stroke();
-      c.globalAlpha = a;
+    if (t > 0.08) {
+      c.save(); c.translate(x, y); c.rotate(az || 0);
+      c.beginPath(); c.ellipse(0, 0, r * (1 + 2 * t), r, 0, 0, 6.283); c.fill();
+      if (wcWetness > 0.35) {
+        c.strokeStyle = col; c.globalAlpha = a * 0.35 * wcWetness;
+        c.lineWidth = Math.max(1, r * 0.12); c.stroke();
+      }
+      c.restore();
+    } else {
+      c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
+      if (wcWetness > 0.35) {
+        c.strokeStyle = col;
+        c.globalAlpha = a * 0.35 * wcWetness;
+        c.lineWidth = Math.max(1, r * 0.12);
+        c.stroke();
+        c.globalAlpha = a;
+      }
     }
     return;
   }
@@ -1046,17 +1111,28 @@ function stamp(c, col, x, y, r, a) {
     c.fillStyle = g;
   } else c.fillStyle = col;
 
-  c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
+  if (t > 0.08) {
+    c.save();
+    c.translate(x, y);
+    c.rotate(az || 0);
+    c.beginPath();
+    c.ellipse(0, 0, r * (1 + 2.2 * t), r, 0, 0, 6.283);
+    c.fill();
+    c.restore();
+  } else {
+    c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
+  }
 }
 // 筆刷畫在暫存層；橡皮擦用同一支筆刷直接從圖層擦掉
 function draw(a, b, e) {
   const soft = isSoftErase();
   const pen = e.pointerType === 'pen', t = (!eraser || soft) && B.tilt && pen ? tiltOf(e) : 0;
+  const az = pen ? (e.azimuthAngle || 0) : 0;
   const w = width(e) * (1 + 3 * t), m = w / 2 + 2;
   const curFlow = B.id === 'pencil' ? (PENCIL_HARDNESS[curHardness]?.flow || B.flow)
                 : (B.id === 'wc' || B.wet) ? ((WC_BRUSHES[curWcType]?.flow || B.flow) * (1.3 - 0.5 * wcWetness))
                 : B.flow;
-  const fl = (!eraser || soft) ? curFlow * (pen && B.po ? 1 - B.po + B.po * e.pressure : 1) * (1 - .6 * t) : 1;
+  const fl = (!eraser || soft) ? curFlow * (pen && B.po ? 1 - B.po + B.po * penPressure(e) : 1) * (1 - .6 * t) : 1;
   if (!bb) bb = [Infinity, Infinity, -Infinity, -Infinity];
   bb = [Math.min(bb[0], a[0] - m, b[0] - m), Math.min(bb[1], a[1] - m, b[1] - m), Math.max(bb[2], a[0] + m, b[0] + m), Math.max(bb[3], a[1] + m, b[1] + m)];
   const c = eraser ? cur.ctx : tctx, col = $('color').value;
@@ -1066,7 +1142,7 @@ function draw(a, b, e) {
               : B.sp;
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]), step = Math.max(1, w * ((!eraser || soft) ? spVal : .1));
   let k = rest;
-  for (; k <= d; k += step) { const f = d ? k / d : 0; stamp(c, col, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, w / 2, fl); }
+  for (; k <= d; k += step) { const f = d ? k / d : 0; stamp(c, col, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, w / 2, fl, t, az); }
   rest = k - d; c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
 }
 
@@ -1154,17 +1230,24 @@ stage.onpointerdown = e => {
     const h = gHandles().find(p => { const [hx, hy] = toStage(p.x, p.y); return Math.hypot(hx - px, hy - py) < R; });
     if (h) { gdrag = { id: h.id, pid: e.pointerId }; return; }
   }
+  let palmReject = true; // Apple Pencil 專用防誤觸
+  try { palmReject = localStorage.getItem('palm_reject') !== '0'; } catch {}
+
   if (e.pointerType === 'pen') {
     pen = true;
-    // 手掌先落在畫布上、筆才下來（iPad 很常見）：把那一筆手掌筆劃丟掉，別讓它混進真正的筆劃
+    hoverCur = null;
+    drawECur();
+    // 手掌先落在畫布上、筆才下來（iPad 很常見）：把那一筆手掌筆劃丟掉
     if (last && touches.has(sid)) cancelStroke();
   }
   if (e.pointerType === 'touch') {
+    const isPalm = (e.width > 22 || e.height > 22) || (pen && palmReject);
     touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (touches.size === 1 || !tap) tap = { t: performance.now(), n: 0, moved: false, start: new Map() };
     tap.n = Math.max(tap.n, touches.size); tap.start.set(e.pointerId, [e.clientX, e.clientY]);
     if (touches.size >= 2) cancelStroke();
-    if (touches.size >= 2 || pen) return; // 兩指一律是手勢；偵測到 Apple Pencil 後單指也只負責平移
+    // 防誤觸：已偵測到 Apple Pencil 或大面積接觸時，單指觸控不繪圖
+    if (touches.size >= 2 || (palmReject && pen) || (pen && isPalm)) return;
   } else if (e.button === 1 || space) { pan = [e.clientX, e.clientY]; return; }
   if (e.pointerType === 'mouse' && e.button !== 0) return; // 右鍵／其他鍵不該落筆
   startStroke(e);
@@ -1175,9 +1258,27 @@ const showECur = e => {
   eCur = [e.clientX, e.clientY, (pressed ? width(e) * (1 + 3 * (B.tilt ? tiltOf(e) : 0)) : +$('size').value) / 2];
   drawECur();
 };
-stage.onpointerleave = () => { if (eCur) { eCur = null; drawECur(); } };
+const showHoverCur = e => {
+  if (!pencilHoverOn || last || eraser) {
+    if (hoverCur) { hoverCur = null; drawECur(); }
+    return;
+  }
+  const rad = (+width(e)) / 2;
+  const t = B.tilt ? tiltOf(e) : 0;
+  const az = e.azimuthAngle || 0;
+  hoverCur = [e.clientX, e.clientY, rad, t, az, e.pointerType];
+  drawECur();
+};
+stage.onpointerleave = () => {
+  if (eCur) { eCur = null; drawECur(); }
+  if (hoverCur) { hoverCur = null; drawECur(); }
+};
 stage.onpointermove = e => {
-  if (eraser && (e.pointerType !== 'touch' || (last && e.pointerId === sid))) showECur(e);
+  if (eraser && (e.pointerType !== 'touch' || (last && e.pointerId === sid))) {
+    showECur(e);
+  } else if (!eraser && e.pointerType !== 'touch' && !last) {
+    showHoverCur(e);
+  }
   if (tf) return tfMove(e);
   if (gdrag) {
     if (e.pointerId === gdrag.pid) {
@@ -1189,12 +1290,16 @@ stage.onpointermove = e => {
   }
   if (tap?.start.has(e.pointerId)) { const p0 = tap.start.get(e.pointerId); if (Math.hypot(e.clientX - p0[0], e.clientY - p0[1]) > 10) tap.moved = true; }
   if (touches.has(e.pointerId)) {
+    let palmReject = true;
+    try { palmReject = localStorage.getItem('palm_reject') !== '0'; } catch {}
     const old = touches.size === 2 ? mid() : null, prev = touches.get(e.pointerId);
     touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (old) {
       const n = mid(); zoomV(old[0], old[1], n[2] / old[2]); rotateV(old[0], old[1], n[3] - old[3]);
       v.x += n[0] - old[0]; v.y += n[1] - old[1]; apply();
-    } else if (pen && touches.size === 1) { v.x += e.clientX - prev[0]; v.y += e.clientY - prev[1]; apply(); }
+    } else if (pen && touches.size === 1 && !palmReject) {
+      v.x += e.clientX - prev[0]; v.y += e.clientY - prev[1]; apply();
+    }
     if (touches.size > 1 || pen) return;
   }
   if (pan) { v.x += e.clientX - pan[0]; v.y += e.clientY - pan[1]; pan = [e.clientX, e.clientY]; apply(); return; }
@@ -1493,6 +1598,7 @@ function toolUi() {
   if ($('eraser-banner')) $('eraser-banner').style.display = eraser ? 'flex' : 'none';
   if ($('lbl-esoft')) $('lbl-esoft').classList.toggle('highlight', eraser);
   if ($('btn-esoft-done')) $('btn-esoft-done').style.display = eraser ? 'inline-flex' : 'none';
+  updateQuickBar();
 }
 $('brush').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
 $('eraser').onclick = () => { cancelEraserAutoRevert(); setEraser(!eraser); }; // 再次點擊橡皮擦可切換回筆刷
@@ -2053,3 +2159,153 @@ $('vori').onclick = () => resizeDoc(H, W);
 
 addLayer(true); addLayer(); sizeUi(); resizeMinimap();
 renderHardnessBar(); renderNibBar(); renderWcTypesBar(); updateBrushSubpanels();
+
+// --- iPad 側邊 Procreate 風格快速滑桿與長按臨時橡皮擦 ---
+let quickBarOn = true;
+try { quickBarOn = localStorage.getItem('quick_bar_on') !== '0'; } catch {}
+
+function updateQuickBar() {
+  const bar = $('ipad-quick-bar');
+  if (bar) bar.style.display = quickBarOn ? 'flex' : 'none';
+  if (!quickBarOn) return;
+
+  const sz = +$('size').value;
+  const szPct = (sz - 1) / (100 - 1);
+  const sizeFill = $('iq-size-fill'), sizeThumb = $('iq-size-thumb'), sizeBadge = $('iq-size-badge');
+  if (sizeFill) sizeFill.style.height = `${szPct * 100}%`;
+  if (sizeThumb) sizeThumb.style.bottom = `${szPct * 100}%`;
+  if (sizeBadge) sizeBadge.textContent = String(sz);
+
+  const al = +$('alpha').value;
+  const alPct = (al - 5) / (100 - 5);
+  const alFill = $('iq-alpha-fill'), alThumb = $('iq-alpha-thumb'), alBadge = $('iq-alpha-badge');
+  if (alFill) alFill.style.height = `${alPct * 100}%`;
+  if (alThumb) alThumb.style.bottom = `${alPct * 100}%`;
+  if (alBadge) alBadge.textContent = `${al}%`;
+
+  const btn = $('iq-btn-tool');
+  if (btn) {
+    btn.textContent = eraser ? '⌫' : '✎';
+    btn.classList.toggle('eraser-active', eraser);
+    btn.title = eraser ? '目前為橡皮擦（點擊回筆刷）' : '目前為筆刷（點擊換橡皮擦，長按可臨時擦拭）';
+  }
+}
+
+function initQuickSlider(wrapId, onValChange) {
+  const wrap = $(wrapId);
+  if (!wrap) return;
+  const track = wrap.querySelector('.iq-track');
+  let dragging = false;
+
+  const updateFromY = clientY => {
+    const rect = track.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, 1 - (clientY - rect.top) / rect.height));
+    onValChange(ratio);
+    updateQuickBar();
+  };
+
+  wrap.addEventListener('pointerdown', e => {
+    dragging = true;
+    try { wrap.setPointerCapture(e.pointerId); } catch {}
+    updateFromY(e.clientY);
+  });
+  window.addEventListener('pointermove', e => {
+    if (dragging) updateFromY(e.clientY);
+  });
+  const stop = () => { dragging = false; };
+  window.addEventListener('pointerup', stop);
+  window.addEventListener('pointercancel', stop);
+}
+
+function initIpadQuickBar() {
+  initQuickSlider('iq-size-wrap', ratio => {
+    const v = Math.round(1 + ratio * (100 - 1));
+    $('size').value = v;
+    $('size').dispatchEvent(new Event('input'));
+  });
+  initQuickSlider('iq-alpha-wrap', ratio => {
+    const v = Math.round(5 + ratio * (100 - 5));
+    $('alpha').value = v;
+    $('alpha').dispatchEvent(new Event('input'));
+  });
+
+  const btn = $('iq-btn-tool');
+  if (btn) {
+    let pressTimer = null, isLongPress = false, prevToolWasBrush = false;
+
+    btn.addEventListener('pointerdown', e => {
+      btn.setPointerCapture(e.pointerId);
+      isLongPress = false;
+      prevToolWasBrush = !eraser;
+      pressTimer = setTimeout(() => {
+        isLongPress = true;
+        if (prevToolWasBrush) {
+          setEraser(true);
+        }
+      }, 220); // 長按 220ms 啟動臨時橡皮擦
+    });
+
+    btn.addEventListener('pointerup', () => {
+      clearTimeout(pressTimer);
+      if (isLongPress) {
+        if (prevToolWasBrush) setEraser(false);
+      } else {
+        setEraser(!eraser);
+      }
+      isLongPress = false;
+    });
+
+    btn.addEventListener('pointercancel', () => {
+      clearTimeout(pressTimer);
+      if (isLongPress && prevToolWasBrush) setEraser(false);
+      isLongPress = false;
+    });
+  }
+
+  $('size').addEventListener('input', updateQuickBar);
+  $('alpha').addEventListener('input', updateQuickBar);
+  updateQuickBar();
+}
+
+function initIpadSettings() {
+  if ($('palm-reject')) {
+    let palm = true;
+    try { palm = localStorage.getItem('palm_reject') !== '0'; } catch {}
+    $('palm-reject').checked = palm;
+    $('palm-reject').onchange = e => {
+      try { localStorage.setItem('palm_reject', e.target.checked ? '1' : '0'); } catch {}
+    };
+  }
+
+  if ($('pencil-hover')) {
+    $('pencil-hover').checked = pencilHoverOn;
+    $('pencil-hover').onchange = e => {
+      pencilHoverOn = e.target.checked;
+      try { localStorage.setItem('pencil_hover', pencilHoverOn ? '1' : '0'); } catch {}
+      if (!pencilHoverOn && hoverCur) { hoverCur = null; drawECur(); }
+    };
+  }
+
+  if ($('quick-bar-on')) {
+    $('quick-bar-on').checked = quickBarOn;
+    $('quick-bar-on').onchange = e => {
+      quickBarOn = e.target.checked;
+      try { localStorage.setItem('quick_bar_on', quickBarOn ? '1' : '0'); } catch {}
+      updateQuickBar();
+    };
+  }
+
+  $('pressure-seg')?.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', +b.dataset.curve === pressureCurve);
+    b.onclick = () => {
+      pressureCurve = +b.dataset.curve;
+      try { localStorage.setItem('pressure_curve', String(pressureCurve)); } catch {}
+      $('pressure-seg').querySelectorAll('button').forEach(btn => {
+        btn.classList.toggle('on', +btn.dataset.curve === pressureCurve);
+      });
+    };
+  });
+}
+
+initIpadQuickBar();
+initIpadSettings();

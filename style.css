@@ -145,6 +145,102 @@ body {
 #minimap.collapsed #mmbody { display: none; }
 #minimap.collapsed .mm-header { border-bottom: 0; }
 
+/* iPad Procreate 風格側邊快速滑桿與切換鍵 */
+.ipad-quick-bar {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 6px;
+  background: rgba(30, 32, 38, .84);
+  border: 1px solid rgba(65, 68, 74, .75);
+  border-radius: 26px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.iq-slider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+  padding: 2px;
+}
+.iq-track {
+  position: relative;
+  width: 8px;
+  height: 84px;
+  background: rgba(0, 0, 0, .5);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, .1);
+}
+.iq-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--blue);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.iq-thumb {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, 50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .6);
+  border: 2px solid var(--panel);
+  pointer-events: none;
+}
+.iq-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 28px;
+  text-align: center;
+}
+.iq-btn {
+  width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: var(--field) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--ink) !important;
+  font-size: 14px !important;
+  font-weight: bold !important;
+  cursor: pointer;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+}
+.iq-btn:hover {
+  background: var(--line) !important;
+}
+.iq-btn.eraser-active {
+  background: rgba(239, 68, 68, .85) !important;
+  color: #fff !important;
+  border-color: #ff5252 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, .6);
+}
+
 /* 變形面板浮在畫布左上：側邊欄收合時也要看得到 */
 #tfbar {
   position: absolute;

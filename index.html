@@ -2,7 +2,9 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
   <link rel="stylesheet" href="style.css">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
@@ -67,7 +69,20 @@
   </div>
   <div class="et-track"><div id="et-progress" class="et-progress"></div></div>
 </div>
-<div id="stage"><div id="wrap"></div></div>
+<div id="stage">
+  <div id="wrap"></div>
+  <div id="ipad-quick-bar" class="ipad-quick-bar" title="iPad 快速滑桿">
+    <div class="iq-slider" id="iq-size-wrap" title="上下拖曳調整筆刷大小">
+      <div class="iq-track"><div id="iq-size-fill" class="iq-fill"></div><div id="iq-size-thumb" class="iq-thumb"></div></div>
+      <span class="iq-badge" id="iq-size-badge">8</span>
+    </div>
+    <button id="iq-btn-tool" class="iq-btn" type="button" title="點擊切換筆刷／橡皮擦，長按可臨時擦除">✎</button>
+    <div class="iq-slider" id="iq-alpha-wrap" title="上下拖曳調整不透明度">
+      <div class="iq-track"><div id="iq-alpha-fill" class="iq-fill"></div><div id="iq-alpha-thumb" class="iq-thumb"></div></div>
+      <span class="iq-badge" id="iq-alpha-badge">100%</span>
+    </div>
+  </div>
+</div>
 <div id="minimap" title="導航小地圖">
   <div class="mm-header">
     <span>導航小地圖</span>
@@ -172,6 +187,25 @@
     </div>
     <label>透明度 <input id="lalpha" type="range" min="0" max="100" value="100"></label>
     <div id="list"></div>
+  </section>
+
+  <section class="grp" id="sec-ipad">
+    <h2>iPad &amp; Apple Pencil</h2>
+    <label class="check" title="開啟時，單指與手掌觸控不畫圖、不平移；畫圖專屬 Apple Pencil，畫布縮放平移限雙指手勢">
+      <input id="palm-reject" type="checkbox" checked> Apple Pencil 專用（防手掌誤觸）
+    </label>
+    <label class="check" title="Apple Pencil 懸浮（M2/M4 iPad）或滑鼠移動時，預先在畫布顯示筆刷形狀與大小">
+      <input id="pencil-hover" type="checkbox" checked> 筆刷懸浮感應預覽 (Hover)
+    </label>
+    <label class="check" title="在畫布左側顯示 Procreate 風格的快速大小／濃度滑桿與筆刷橡皮擦切換鍵">
+      <input id="quick-bar-on" type="checkbox" checked> 側邊快速快捷滑桿
+    </label>
+    <div style="font-size:11px;font-weight:600;color:var(--muted);margin-top:4px">壓感靈敏度</div>
+    <div class="seg" id="pressure-seg" style="width:100%">
+      <button data-curve="0.75" type="button" title="輕柔：輕觸即出大筆觸">輕柔</button>
+      <button data-curve="1.0" type="button" class="on" title="標準：1:1 原生線性壓感">標準</button>
+      <button data-curve="1.35" type="button" title="紮實：需重壓才出大筆觸">紮實</button>
+    </div>
   </section>
 </aside>
 <script src="app.js"></script>
