@@ -349,6 +349,22 @@
         <div class="palette-grid" id="palette-grid"></div>
       </div>
 
+      <!-- 專業數位筆刷微調面板 -->
+      <div id="sub-studio" class="brush-subpanel" style="display:none">
+        <div class="sub-header">
+          <span class="sub-label" id="studio-brush-label">筆刷特性微調</span>
+        </div>
+        <div id="studio-ctrl-hardness" style="display:none">
+          <label style="margin:0;gap:6px">硬度 <input id="studio-hard" type="range" min="0" max="100" value="100"><span id="studio-hard-val">100%</span></label>
+        </div>
+        <div id="studio-ctrl-angle" style="display:none">
+          <label style="margin:0;gap:6px">斜角 <input id="studio-angle" type="range" min="0" max="180" value="35"><span id="studio-angle-val">35°</span></label>
+        </div>
+        <div id="studio-ctrl-scatter" style="display:none">
+          <label style="margin:0;gap:6px">散佈 <input id="studio-scatter" type="range" min="2" max="16" value="5"><span id="studio-scatter-val">5顆</span></label>
+        </div>
+      </div>
+
       <label>大小 <input id="size" type="range" min="1" max="100" value="8"></label>
       <label>濃度 <input id="alpha" type="range" min="5" max="100" value="100"></label>
       <label class="check"><input id="qson" type="checkbox" checked> 停筆拉成直線</label>

@@ -570,15 +570,36 @@ const PALETTES = {
 };
 
 const BRUSHES = {
-  '鉛筆':       { id: 'pencil', pr: .25, po: .78, hard: 1, flow: .20, sp: .15, cap: 1, grain: 1, tilt: 1 },
-  '彩色鉛筆':   { id: 'cpencil', pr: .32, po: .72, hard: .9, flow: .22, sp: .14, cap: .92, cp: 1, tilt: 1 },
-  '鋼筆':       { id: 'pen', pr: .7, hard: 1, flow: 1, sp: .08, cap: 1 },
-  '粉蠟筆':     { id: 'pastel', pr: .4, po: .6, hard: .8, flow: .45, sp: .12, cap: .96, pastel: 1, tilt: 1 },
-  'Marker':     { id: 'marker', pr: 0, hard: 1, flow: .3, sp: .1, cap: .65, marker: 1 },
-  '丙烯馬克筆': { id: 'acrylic', pr: 0, hard: 1, flow: 1, sp: .1, cap: 1, acrylic: 1 },
-  '水彩':       { id: 'wc', pr: .6, flow: .1, sp: .1, cap: .72, wet: 1 },
-  '噴槍':       { id: 'air', pr: .5, hard: 0, flow: .15, sp: .1, cap: 1 }
+  // ── 專業數位筆刷 (Digital Studio) ──
+  '硬邊圓筆':       { id: 'hard_round', name: '硬邊圓筆', pr: 0, po: 0, hard: 1.0, flow: 1.0, sp: 0.15, cap: 1.0 },
+  '柔邊圓筆':       { id: 'soft_round', name: '柔邊圓筆', pr: 0, po: 0, hard: 0.0, flow: 0.35, sp: 0.08, cap: 1.0 },
+  '柔邊壓感筆':     { id: 'soft_pressure', name: '柔邊壓感筆', pr: 0.85, po: 0, hard: 0.0, flow: 0.45, sp: 0.06, cap: 1.0 },
+  '硬邊壓感濃度筆': { id: 'hard_opacity', name: '硬邊壓感濃度筆', pr: 0.2, po: 0.85, hard: 0.9, flow: 0.8, sp: 0.08, cap: 1.0 },
+  '柔邊噴槍':       { id: 'airbrush_soft', name: '柔邊噴槍', pr: 0.4, po: 0.6, hard: 0.0, flow: 0.15, sp: 0.05, cap: 1.0, buildUp: true },
+  '扁平書法筆':     { id: 'calligraphic', name: '扁平書法筆', pr: 0.3, hard: 0.85, flow: 0.95, sp: 0.05, cap: 1.0, calligraphic: true, roundness: 0.15, angle: 35 * Math.PI / 180 },
+  '粉筆':           { id: 'chalk', name: '粉筆', pr: 0.45, po: 0.5, hard: 0.5, flow: 0.4, sp: 0.1, cap: 0.95, chalk: true, roundness: 0.85 },
+  '乾刷排線筆':     { id: 'dry_brush', name: '乾刷排線筆', pr: 0.4, hard: 0.35, flow: 0.45, sp: 0.08, cap: 0.9, dryBrush: true, roundness: 0.75 },
+  '點陣噴濺筆':     { id: 'stipple', name: '點陣噴濺筆', pr: 0.5, hard: 0.7, flow: 0.6, sp: 0.45, cap: 1.0, scatter: true, count: 5 },
+  '濕邊聚墨水彩':   { id: 'wet_edge', name: '濕邊聚墨水彩', pr: 0.6, hard: 0.2, flow: 0.4, sp: 0.1, cap: 0.85, wetEdge: true },
+
+  // ── 經典手繪媒材 (Natural Media) ──
+  '鉛筆':           { id: 'pencil', pr: .25, po: .78, hard: 1, flow: .20, sp: .15, cap: 1, grain: 1, tilt: 1 },
+  '彩色鉛筆':       { id: 'cpencil', pr: .32, po: .72, hard: .9, flow: .22, sp: .14, cap: .92, cp: 1, tilt: 1 },
+  '鋼筆':           { id: 'pen', pr: .7, hard: 1, flow: 1, sp: .08, cap: 1 },
+  '粉蠟筆':         { id: 'pastel', pr: .4, po: .6, hard: .8, flow: .45, sp: .12, cap: .96, pastel: 1, tilt: 1 },
+  'Marker':         { id: 'marker', pr: 0, hard: 1, flow: .3, sp: .1, cap: .65, marker: 1 },
+  '丙烯馬克筆':     { id: 'acrylic', pr: 0, hard: 1, flow: 1, sp: .1, cap: 1, acrylic: 1 },
+  '水彩':           { id: 'wc', pr: .6, flow: .1, sp: .1, cap: .72, wet: 1 },
+  '噴槍':           { id: 'air', pr: .5, hard: 0, flow: .15, sp: .1, cap: 1 }
 };
+BRUSHES['Hard Round'] = BRUSHES['硬邊圓筆'];
+BRUSHES['Soft Round'] = BRUSHES['柔邊圓筆'];
+BRUSHES['Airbrush'] = BRUSHES['柔邊噴槍'];
+BRUSHES['Flat Calligraphic'] = BRUSHES['扁平書法筆'];
+BRUSHES['Chalk'] = BRUSHES['粉筆'];
+BRUSHES['Dry Brush'] = BRUSHES['乾刷排線筆'];
+BRUSHES['Stipple Spatter'] = BRUSHES['點陣噴濺筆'];
+BRUSHES['Wet Edge Round'] = BRUSHES['濕邊聚墨水彩'];
 BRUSHES['HB 鉛筆'] = BRUSHES['鉛筆'];
 BRUSHES['6B 鉛筆'] = BRUSHES['鉛筆'];
 
@@ -669,8 +690,31 @@ function ensureBrushMode() {
   if (eraser) setEraser(false);
 }
 
-const DISPLAY_BRUSH_KEYS = ['鉛筆', '彩色鉛筆', '鋼筆', '粉蠟筆', 'Marker', '丙烯馬克筆', '水彩', '噴槍'];
-$('bsel').append(...DISPLAY_BRUSH_KEYS.map(k => new Option(k)));
+const BRUSH_CATEGORIES = [
+  {
+    group: '數位繪圖 (Digital Studio)',
+    items: ['硬邊圓筆', '柔邊圓筆', '柔邊壓感筆', '硬邊壓感濃度筆', '柔邊噴槍', '扁平書法筆', '粉筆', '乾刷排線筆', '點陣噴濺筆', '濕邊聚墨水彩']
+  },
+  {
+    group: '手繪媒材 (Natural Media)',
+    items: ['鉛筆', '彩色鉛筆', '鋼筆', '粉蠟筆', 'Marker', '丙烯馬克筆', '水彩']
+  }
+];
+
+function initBrushSelector() {
+  const sel = $('bsel');
+  if (!sel) return;
+  sel.innerHTML = '';
+  BRUSH_CATEGORIES.forEach(cat => {
+    const grp = document.createElement('optgroup');
+    grp.label = cat.group;
+    cat.items.forEach(k => grp.appendChild(new Option(k, k)));
+    sel.appendChild(grp);
+  });
+  sel.value = '鉛筆';
+}
+initBrushSelector();
+
 $('bsel').onchange = e => {
   ensureBrushMode();
   B = BRUSHES[e.target.value] || BRUSHES['鉛筆'];
@@ -781,6 +825,57 @@ function pastelGrain(col) {
     pastelGrains[col] = px.createPattern(patC, 'repeat');
   }
   return pastelGrains[col];
+}
+
+const chalkGrains = {};
+function chalkGrain(col) {
+  if (!chalkGrains[col]) {
+    const c = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+    const x = c.getContext('2d'), d = x.createImageData(128, 128);
+    for (let py = 0; py < 128; py++) {
+      for (let px = 0; px < 128; px++) {
+        const i = (py * 128 + px) * 4;
+        const weave = Math.sin(px * 0.45) * Math.cos(py * 0.45);
+        const noise = Math.random();
+        const val = 0.5 * noise + 0.5 * (weave * 0.5 + 0.5);
+        d.data[i + 3] = val > 0.38 ? Math.min(255, (val - 0.25) * 320) : 0;
+      }
+    }
+    x.putImageData(d, 0, 0);
+    const patC = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+    const pctx = patC.getContext('2d');
+    pctx.fillStyle = col; pctx.fillRect(0, 0, 128, 128);
+    pctx.globalCompositeOperation = 'destination-in';
+    pctx.drawImage(c, 0, 0);
+    chalkGrains[col] = pctx.createPattern(patC, 'repeat');
+  }
+  return chalkGrains[col];
+}
+
+const dryHatchGrains = {};
+function dryHatchGrain(col) {
+  if (!dryHatchGrains[col]) {
+    const c = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+    const x = c.getContext('2d');
+    x.fillStyle = 'rgba(0,0,0,0)';
+    x.fillRect(0, 0, 128, 128);
+    x.strokeStyle = '#000';
+    for (let i = -128; i < 256; i += 3 + Math.random() * 4) {
+      x.lineWidth = 0.8 + Math.random() * 1.8;
+      x.globalAlpha = 0.2 + Math.random() * 0.7;
+      x.beginPath();
+      x.moveTo(i, 0);
+      x.lineTo(i + 128, 128);
+      x.stroke();
+    }
+    const patC = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+    const pctx = patC.getContext('2d');
+    pctx.fillStyle = col; pctx.fillRect(0, 0, 128, 128);
+    pctx.globalCompositeOperation = 'destination-in';
+    pctx.drawImage(c, 0, 0);
+    dryHatchGrains[col] = pctx.createPattern(patC, 'repeat');
+  }
+  return dryHatchGrains[col];
 }
 
 function renderHardnessBar() {
@@ -926,6 +1021,59 @@ function updateBrushSubpanels() {
     $('sub-palette').style.display = isPal ? '' : 'none';
     if (isPal) renderPalette(palKey);
   }
+
+  // 專業數位筆刷子面板
+  const isStudio = ['hard_round', 'soft_round', 'soft_pressure', 'hard_opacity', 'airbrush_soft', 'calligraphic', 'chalk', 'dry_brush', 'stipple', 'wet_edge'].includes(brush.id);
+  if ($('sub-studio')) {
+    $('sub-studio').style.display = isStudio ? '' : 'none';
+    if (isStudio) {
+      if ($('studio-brush-label')) $('studio-brush-label').textContent = `${brush.name || bVal} 特性微調`;
+      const hasHard = brush.hard != null && !brush.calligraphic && !brush.scatter;
+      if ($('studio-ctrl-hardness')) {
+        $('studio-ctrl-hardness').style.display = hasHard ? '' : 'none';
+        if (hasHard) {
+          $('studio-hard').value = Math.round(brush.hard * 100);
+          $('studio-hard-val').textContent = Math.round(brush.hard * 100) + '%';
+        }
+      }
+      const hasAngle = !!brush.calligraphic;
+      if ($('studio-ctrl-angle')) {
+        $('studio-ctrl-angle').style.display = hasAngle ? '' : 'none';
+        if (hasAngle) {
+          const deg = Math.round((brush.angle || 0) * 180 / Math.PI);
+          $('studio-angle').value = deg;
+          $('studio-angle-val').textContent = deg + '°';
+        }
+      }
+      const hasScatter = !!brush.scatter;
+      if ($('studio-ctrl-scatter')) {
+        $('studio-ctrl-scatter').style.display = hasScatter ? '' : 'none';
+        if (hasScatter) {
+          $('studio-scatter').value = brush.count || 5;
+          $('studio-scatter-val').textContent = (brush.count || 5) + '顆';
+        }
+      }
+    }
+  }
+}
+
+if ($('studio-hard')) {
+  $('studio-hard').oninput = e => {
+    B.hard = e.target.value / 100;
+    if ($('studio-hard-val')) $('studio-hard-val').textContent = e.target.value + '%';
+  };
+}
+if ($('studio-angle')) {
+  $('studio-angle').oninput = e => {
+    B.angle = e.target.value * Math.PI / 180;
+    if ($('studio-angle-val')) $('studio-angle-val').textContent = e.target.value + '°';
+  };
+}
+if ($('studio-scatter')) {
+  $('studio-scatter').oninput = e => {
+    B.count = +e.target.value;
+    if ($('studio-scatter-val')) $('studio-scatter-val').textContent = e.target.value + '顆';
+  };
 }
 
 $('color').oninput = e => {
@@ -1017,7 +1165,7 @@ function dryWcGrain(col) {
 
 let rest = 0;
 // col 由 draw() 一次讀進來：input[type=color].value 每讀一次都要做值正規化，不該每顆筆印讀
-function stamp(c, col, x, y, r, a) {
+function stamp(c, col, x, y, r, a, t = 0, az = 0) {
   c.globalAlpha = a;
   if (tipImg) { c.drawImage(tipOf(col), x - r, y - r, r * 2, r * 2); return; } // 筆尖圖自帶紋理
   if (eraser && !eraserSoft) {
@@ -1115,7 +1263,54 @@ function stamp(c, col, x, y, r, a) {
     }
     return;
   }
-  if (B.pastel) c.fillStyle = pastelGrain(col);
+  // 扁平書法平尖 (Calligraphic Chisel)
+  if (B.calligraphic) {
+    c.fillStyle = col;
+    c.save();
+    c.translate(x, y);
+    c.rotate(B.angle || (35 * Math.PI / 180));
+    c.beginPath();
+    c.ellipse(0, 0, r * 1.5, Math.max(1, r * (B.roundness || 0.15)), 0, 0, 6.283);
+    c.fill();
+    c.restore();
+    return;
+  }
+
+  // 點陣噴濺筆 (Stipple Spatter)
+  if (B.scatter) {
+    c.fillStyle = col;
+    const cnt = B.count || 5;
+    for (let s = 0; s < cnt; s++) {
+      const dist = (Math.random() * 0.8 + 0.2) * r * 2.2;
+      const ang = Math.random() * 6.283;
+      const srad = Math.max(0.6, r * (0.08 + Math.random() * 0.28));
+      c.beginPath();
+      c.arc(x + Math.cos(ang) * dist, y + Math.sin(ang) * dist, srad, 0, 6.283);
+      c.fill();
+    }
+    return;
+  }
+
+  // 濕邊聚墨水彩 (Wet Edge Round)
+  if (B.wetEdge) {
+    const g = c.createRadialGradient(x, y, r * 0.1, x, y, r);
+    g.addColorStop(0, col);
+    g.addColorStop(0.65, col);
+    g.addColorStop(0.9, col);
+    g.addColorStop(1, col + '00');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(x, y, r, 0, 6.283); c.fill();
+    c.strokeStyle = col;
+    c.lineWidth = Math.max(1, r * 0.18);
+    c.globalAlpha = a * 0.55;
+    c.stroke();
+    c.globalAlpha = a;
+    return;
+  }
+
+  if (B.chalk) c.fillStyle = chalkGrain(col);
+  else if (B.dryBrush) c.fillStyle = dryHatchGrain(col);
+  else if (B.pastel) c.fillStyle = pastelGrain(col);
   else if (B.cp) c.fillStyle = cpGrain(col);
   else if (B.grain) c.fillStyle = pencilGrain(col, curHardness);
   else if (B.hard < 1) {
