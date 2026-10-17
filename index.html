@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt5">
+  <link rel="stylesheet" href="style.css?v=opt6">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -29,6 +29,7 @@
   </div>
   <div id="m3c"></div>
 </div>
+<div id="loupe" class="loupe"><canvas id="loupe-cv"></canvas></div>
 <div id="tool-toast" class="tool-toast" role="status" aria-live="polite"><span id="tt-swatch" class="tt-swatch"></span><span id="tt-text"></span></div>
 <header id="topbar">
   <button id="btn-new-doc" class="btn-new-doc" title="新增畫布／紙張尺寸選擇 (⌘N)">📄 新畫布</button>
@@ -468,6 +469,13 @@
       <p class="hint" style="margin:0;line-height:1.45">沿著輪廓拖曳，線會吸到最近的最強邊緣；放手即完成一筆（可復原）。線寬用「大小」、顏色用前景色。</p>
       <label>吸附半徑 <input id="mradius" type="range" min="4" max="40" value="14"><span id="mradius-val">14px</span></label>
       <label>平滑 <input id="msmooth" type="range" min="0" max="100" value="55"><span id="msmooth-val">55</span></label>
+      <label class="check" title="描完自動把路徑首尾接起來，用前景色填滿（跟描邊同一個復原步驟）">
+        <input id="mfill" type="checkbox"> 描完填色（封閉路徑）
+      </label>
+      <label>填色濃度 <input id="mfillalpha" type="range" min="5" max="100" value="20"><span id="mfillalpha-val">20%</span></label>
+      <label class="check" title="描邊時在游標旁顯示放大鏡，看得到吸附點落在哪條邊上">
+        <input id="mloupe" type="checkbox" checked> 顯示吸附放大鏡
+      </label>
     </section>
 
     <!-- 5. iPad & Apple Pencil -->
@@ -493,6 +501,6 @@
     </section>
   </aside>
 </div>
-<script src="app.js?v=opt5"></script>
+<script src="app.js?v=opt6"></script>
 </body>
 </html>

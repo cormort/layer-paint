@@ -1577,7 +1577,7 @@ stage.onpointerdown = e => {
   stage.setPointerCapture(e.pointerId);
   if (tf) { tfPts.set(e.pointerId, [e.clientX, e.clientY]); return; }
   if (picking && !touches.size) { pickColor(pos(e)); return; }
-  if (magnet) { mPid = e.pointerId; startMagnet(pos(e)); return; }
+  if (magnet) { mPid = e.pointerId; startMagnet(pos(e), e.clientX, e.clientY); return; }
   if (guide.mode) { // 先檢查是否按在消失點／地平線把手上
     const r = stageRect(), px = e.clientX - r.left, py = e.clientY - r.top, R = e.pointerType === 'touch' ? 30 : 16;
     const h = gHandles().find(p => { const [hx, hy] = toStage(p.x, p.y); return Math.hypot(hx - px, hy - py) < R; });
@@ -1636,7 +1636,7 @@ stage.onpointermove = e => {
     showHoverCur(e);
   }
   if (tf) return tfMove(e);
-  if (magnet && mActive) { if (e.pointerId === mPid) magnetMove(pos(e)); return; }
+  if (magnet && mActive) { if (e.pointerId === mPid) magnetMove(pos(e), e.clientX, e.clientY); return; }
   if (gdrag) {
     if (e.pointerId === gdrag.pid) {
       const p = pos(e), id = gdrag.id;
@@ -2343,6 +2343,41 @@ function smoothPts(pts, passes) {
 
 function magnetWidth() { return Math.max(1, width({ pointerType: 'mouse' })); }
 
+// --- 吸附放大鏡：游標旁 4 倍的圓形取景，看得到吸附點落在哪條邊上 ---
+const LOUPE = 128;
+let lcv = null, lctx = null;
+function drawLoupe(clientX, clientY, cx, cy) {
+  const box = $('loupe'); if (!box) return;
+  if (!lcv) { lcv = $('loupe-cv'); lctx = lcv.getContext('2d'); }
+  // DPR 可能在執行中改變（外接螢幕、視窗搬到不同縮放比、行動版模擬），每次確認畫布尺寸
+  const dpr = devicePixelRatio || 1, need = Math.round(LOUPE * dpr);
+  if (lcv.width !== need) { lcv.width = need; lcv.height = need; }
+  const g = lctx;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  g.fillStyle = '#fff'; g.fillRect(0, 0, LOUPE, LOUPE);
+  // 取樣範圍：畫布本身至少放大 5 倍；畫布已經放到很大時改成螢幕 2 倍，免得放大鏡反而縮小
+  const src = Math.min(LOUPE / 5, 64 / Math.max(.05, v.s));
+  layers.filter(l => l.visible).forEach(l => {
+    g.globalAlpha = +(l.c.style.opacity || 1);
+    g.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    g.drawImage(l.c, cx - src / 2, cy - src / 2, src, src, 0, 0, LOUPE, LOUPE);
+  });
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  const h = LOUPE / 2;
+  g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(h, 16); g.lineTo(h, LOUPE - 16); g.moveTo(16, h); g.lineTo(LOUPE - 16, h); g.stroke();
+  g.strokeStyle = snapHit ? '#2dd4bf' : '#f59e0b'; // 青＝吸到邊了；橘＝目前是照手感走
+  g.lineWidth = 2; g.beginPath(); g.arc(h, h, 10, 0, 6.283); g.stroke();
+  box.style.display = 'block';
+  const left = Math.round(Math.max(8, Math.min(innerWidth - LOUPE - 8, clientX - LOUPE / 2)));
+  const top = clientY - LOUPE - 36;
+  box.style.left = left + 'px';
+  box.style.top = Math.round(top < 56 ? clientY + 36 : top) + 'px';
+}
+function hideLoupe() { const box = $('loupe'); if (box) box.style.display = 'none'; }
+const loupeOn = () => !!$('mloupe')?.checked;
+
 function drawMagnetPreview() {
   const [c, d] = prep(mcv);
   if (!mPath || mPath.length < 2) { mcv.style.display = 'none'; return; }
@@ -2357,7 +2392,7 @@ function drawMagnetPreview() {
   c.stroke();
 }
 
-function startMagnet([x, y]) {
+function startMagnet([x, y], clientX, clientY) {
   if (!cur) return;
   if (cur.locked) { showToast(cur.base ? '底圖已鎖定：先在圖層列點 🔒 解鎖才能描邊' : '「' + cur.name + '」已鎖定：先解鎖才能描邊'); return; }
   buildEdgeMap();
@@ -2365,9 +2400,10 @@ function startMagnet([x, y]) {
   snapHit = true; // 起筆先用放寬後（×1.6）的半徑去咬邊，比較容易咬上
   mPath = [snapEdge(x, y, magnetRadius() * 1.6)];
   drawMagnetPreview();
+  if (loupeOn()) drawLoupe(clientX, clientY, mPath[0][0], mPath[0][1]); else hideLoupe();
 }
 
-function magnetMove([x, y]) {
+function magnetMove([x, y], clientX, clientY) {
   if (!mActive || !mPath) return;
   const last = mPath[mPath.length - 1];
   const rad = magnetRadius() * (snapHit ? 1.6 : 1); // 吸住了就放寬一點，形成磁滯
@@ -2378,10 +2414,11 @@ function magnetMove([x, y]) {
   const n = Math.min(20, Math.max(1, Math.ceil(d / 6)));
   for (let i = 1; i <= n; i++) mPath.push(snapEdge(last[0] + (to[0] - last[0]) * i / n, last[1] + (to[1] - last[1]) * i / n, rad));
   drawMagnetPreview();
+  if (loupeOn()) drawLoupe(clientX, clientY, to[0], to[1]); else hideLoupe();
 }
 
 function commitMagnet() {
-  mActive = false; mPid = null;
+  mActive = false; mPid = null; hideLoupe();
   const raw = mPath; mPath = null;
   const [mc] = prep(mcv); mc.clearRect(0, 0, mcv.width, mcv.height); mcv.style.display = 'none';
   if (!raw || raw.length < 2 || !cur || cur.locked) return;
@@ -2394,19 +2431,27 @@ function commitMagnet() {
   if (bw <= 0 || bh <= 0) return;
   pushUndo({ l: cur, c: crop(cur.c, bx, by, bw, bh), x: bx, y: by });
   dropImg(cur); // 描過就沒有原始圖檔可以無損再變形了（跟自由筆畫一致）
-  const ctx = cur.ctx;
+  const ctx = cur.ctx, col = $('color').value;
+  const doFill = !!$('mfill')?.checked;                                  // 封閉路徑填色
+  const fillA = Math.max(.02, +($('mfillalpha')?.value || 20) / 100);     // 填色濃度
   ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.fillStyle = col;
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  if (doFill) {
+    ctx.closePath();                     // 首尾接起來才是一個封閉面
+    ctx.globalAlpha = fillA;
+    ctx.fill();
+  }
   ctx.globalAlpha = Math.max(.05, +$('alpha').value / 100);
-  ctx.strokeStyle = $('color').value;
-  ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  ctx.stroke();
   ctx.restore();
   list(cur); refresh3d?.(cur);
 }
 
 function endMagnet() {
   if (!magnet) return;
-  magnet = false; mActive = false; mPid = null; mPath = null;
+  magnet = false; mActive = false; mPid = null; mPath = null; hideLoupe();
   if (mcv) { const [c] = prep(mcv); c.clearRect(0, 0, mcv.width, mcv.height); mcv.style.display = 'none'; }
   toolUi(); drawECur();
 }
@@ -2420,12 +2465,21 @@ $('mtog').onclick = () => {
 if ($('lt-magnet')) $('lt-magnet').onclick = () => $('mtog').click();
 if ($('magnet-quick')) $('magnet-quick').onclick = () => $('mtog').click();
 // 兩個滑桿的數值顯示 + 記住設定
-['mradius', 'msmooth'].forEach(id => {
+['mradius', 'msmooth', 'mfillalpha'].forEach(id => {
   const el = $(id), val = $(id + '-val'); if (!el) return;
   try { const sv = localStorage.getItem('magnet_' + id); if (sv != null) el.value = sv; } catch {}
-  const sync = () => { if (val) val.textContent = id === 'mradius' ? el.value + 'px' : el.value; };
+  const fmt = v2 => id === 'mradius' ? v2 + 'px' : id === 'mfillalpha' ? v2 + '%' : v2;
+  const sync = () => { if (val) val.textContent = fmt(el.value); };
   el.oninput = () => { sync(); try { localStorage.setItem('magnet_' + id, el.value); } catch {} };
   sync();
+});
+['mfill', 'mloupe'].forEach(id => {
+  const el = $(id); if (!el) return;
+  try { const sv = localStorage.getItem('magnet_' + id); if (sv != null) el.checked = sv === '1'; } catch {}
+  el.onchange = () => {
+    try { localStorage.setItem('magnet_' + id, el.checked ? '1' : '0'); } catch {}
+    if (id === 'mloupe' && !el.checked) hideLoupe();
+  };
 });
 
 // --- 3D 柱體：每個可見圖層取樣成一片方塊板，由下到上（後到前）依層距排開 ---
