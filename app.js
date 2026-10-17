@@ -10,6 +10,19 @@ const fitThumbSize = () => {
 };
 fitThumbSize();
 const $ = id => document.getElementById(id);
+// 輕量提示條（滴管取色結果、鎖定提醒…）：不吃指標事件，自己會消失
+// 放在最前面，因為圖層建立、鎖定這些早期流程就會用到
+let toastTimer = 0;
+function showToast(text, hex) {
+  const t = $('tool-toast'); if (!t) return;
+  const sw = $('tt-swatch'), tx = $('tt-text');
+  t.classList.toggle('has-swatch', !!hex);
+  if (hex && sw) sw.style.backgroundColor = hex;
+  if (tx) tx.textContent = text;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 1600);
+}
 const wrap = $('wrap');
 let layers = [], cur = null, eraser = false, n = 0, undos = [], redos = [];
 let tf = null; // 變形中的狀態（覆蓋層一開始就會讀到，所以放最前面）
@@ -321,8 +334,11 @@ const thumbs = new Map();
 // 匯入底圖的 ImageBitmap 佔用的是 GPU/CPU 記憶體，換掉時要明確釋放
 const dropImg = L => { if (L && L.img) { L.img.close(); L.img = null; } if (L) L.raw = null; };
 const forget = L => { thumbs.delete(L); dropImg(L); };
+// 底圖＝匯入的參考圖層（有 base 旗標或還留著原始圖檔的圖層）；一疊底圖取最上面那張
+const baseLayer = () => { for (let i = layers.length - 1; i >= 0; i--) if (layers[i].base) return layers[i]; return null; };
 function list(...dirty) {
   const d = new Set(dirty);
+  const listEl = $('list'), keepScroll = listEl ? listEl.scrollTop : 0; // 重建列之後把捲動位置放回去
   if ($('lalpha')) $('lalpha').value = (cur.c.style.opacity || 1) * 100;
   if ($('lalpha-val')) $('lalpha-val').textContent = Math.round((cur.c.style.opacity || 1) * 100) + '%';
   if ($('lblend')) $('lblend').value = cur.c.style.mixBlendMode || 'normal';
@@ -350,7 +366,13 @@ function list(...dirty) {
     lk.textContent = l.locked ? '🔒' : '🔓';
     lk.title = l.locked ? '解除鎖定' : '鎖定（保護）這一層';
     lk.setAttribute('aria-pressed', !!l.locked);
-    lk.onclick = e => { e.stopPropagation(); l.locked = !l.locked; list(); };
+    lk.onclick = e => {
+      e.stopPropagation();
+      // 底圖預設鎖定：解鎖等於開放編輯，先問一次
+      if (l.locked && (l.base || l.bg) && !confirm('「' + l.name + '」解鎖後，畫筆、橡皮擦與變形都會改到這一層。\n確定要解除鎖定、開放編輯嗎？')) return;
+      l.locked = !l.locked; list();
+      if (l.locked) showToast('已鎖定「' + l.name + '」');
+    };
 
     const rm = document.createElement('button'); rm.textContent = '✕'; rm.title = '刪除這一層';
     rm.disabled = layers.length < 2 || !!stop3d;
@@ -363,7 +385,20 @@ function list(...dirty) {
     row.onclick = () => { cur = l; list(); };
     return row;
   }));
+  if (listEl && keepScroll) listEl.scrollTop = keepScroll;
+  updateBaseToggle();
   updateMinimapThumb?.();
+}
+
+// 頂部工具列的「底圖」開關：狀態跟著圖層走，沒有底圖時點下去就是匯入
+function updateBaseToggle() {
+  const bt = $('btog'); if (!bt) return;
+  const b = baseLayer(), on = !!(b && b.visible);
+  bt.classList.toggle('off', !on);
+  bt.textContent = b && !b.visible ? '🙈 底圖' : '👁️ 底圖';
+  bt.setAttribute('aria-pressed', String(on));
+  bt.title = !b ? '目前沒有底圖：點一下匯入參考圖（匯入後自動鎖定，解鎖要確認）'
+    : (on ? '隱藏底圖（只是暫時不看，鎖定狀態不變）' : '顯示底圖');
 }
 
 // --- 繪圖 ---
@@ -792,6 +827,7 @@ function setEraser(state) {
 }
 function ensureBrushMode() {
   cancelEraserAutoRevert();
+  endPick();               // 手動換色＝離開滴管
   if (eraser) setEraser(false);
 }
 
@@ -1546,6 +1582,9 @@ stage.onpointerdown = e => {
   let palmReject = true; // Apple Pencil 專用防誤觸
   try { palmReject = localStorage.getItem('palm_reject') !== '0'; } catch {}
 
+  // 想畫在被鎖定的圖層（含預設鎖定的底圖）時說清楚原因，不要只是「按了沒反應」
+  if (cur.locked && e.pointerType !== 'touch' && !space) showToast(cur.base ? '底圖已鎖定：先在圖層列點 🔒 解鎖，才能畫在上面' : '「' + cur.name + '」已鎖定：先解鎖才能畫');
+
   if (e.pointerType === 'pen') {
     pen = true;
     hoverCur = null;
@@ -1664,24 +1703,32 @@ addEventListener('keyup', e => { if (e.code === 'Space') space = false; });
 // 變形用整張快照，所以位元組上限比筆數上限更貼近實際記憶體。
 const UNDO_MAX_BYTES = 64 * 1024 * 1024;
 const undoBytes = e => e.c.width * e.c.height * 4;
+// 沒有可復原／可重做的東西時，按鈕直接變灰，免得使用者一直按了沒反應
+function syncUndoBtns() {
+  if ($('undo')) $('undo').disabled = !undos.length;
+  if ($('redo')) $('redo').disabled = !redos.length;
+}
 function pushUndo(e) {
   undos.push(e); redos = [];
   let total = undos.reduce((s, x) => s + undoBytes(x), 0);
   while (total > UNDO_MAX_BYTES && undos.length > 1) total -= undoBytes(undos.shift());
+  syncUndoBtns();
 }
 // 圖層被刪掉或合併後，堆疊裡屬於它的快照已經沒有意義，但每一張都還參考著那個 3.84 MB 的
 // canvas；不清掉的話會一直被算在位元組上限裡，直到被新筆劃擠出去
-function purge(L) { undos = undos.filter(u => u.l !== L); redos = redos.filter(u => u.l !== L); }
+function purge(L) { undos = undos.filter(u => u.l !== L); redos = redos.filter(u => u.l !== L); syncUndoBtns(); }
 function swap(from, to) {
   let s;
   while ((s = from.pop())) if (layers.includes(s.l)) break; // 丟掉已刪除圖層的紀錄
-  if (!s) return;
+  if (!s) return syncUndoBtns();
   const { x, y } = s, w = s.c.width, h = s.c.height;
   to.push({ l: s.l, c: crop(s.l.c, x, y, w, h), x, y });
   dropImg(s.l); s.l.ctx.clearRect(x, y, w, h); s.l.ctx.drawImage(s.c, x, y); list(s.l); refresh3d?.(s.l);
+  syncUndoBtns();
 }
 $('undo').onclick = () => swap(undos, redos);
 $('redo').onclick = () => swap(redos, undos);
+syncUndoBtns(); // 一開始兩邊都空，按鈕就是灰的
 addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? $('redo').click() : $('undo').click(); }
 });
@@ -1783,6 +1830,11 @@ addEventListener('keydown', e => {
         closeNewDocModal();
         return;
       }
+      if (picking) { // Esc 先離開滴管，不必再回頭按一次滴管
+        e.preventDefault();
+        endPick();
+        return;
+      }
       if (eraser) {
         e.preventDefault();
         cancelEraserAutoRevert();
@@ -1791,10 +1843,12 @@ addEventListener('keydown', e => {
     } else if (e.key === 'b' || e.key === 'B') {
       e.preventDefault();
       cancelEraserAutoRevert();
+      endPick();
       setEraser(false);
     } else if (e.key === 'e' || e.key === 'E') {
       e.preventDefault();
       cancelEraserAutoRevert();
+      endPick();
       setEraser(!eraser);
     } else if (e.key === 'v' || e.key === 'V') {
       e.preventDefault();
@@ -1843,16 +1897,20 @@ function resizeMinimap() {
 function updateMinimapThumb() {
   if (!mmcv) return;
   const ctx = mmcv.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   ctx.clearRect(0, 0, mmW, mmH);
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, mmW, mmH);
+  // 跟畫布／匯出一樣套用混合模式，否則縮圖顏色會跟實際畫面不一樣
   layers.forEach(l => {
     if (l.visible) {
       ctx.globalAlpha = +(l.c.style.opacity || 1);
+      ctx.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
       ctx.drawImage(l.c, 0, 0, mmW, mmH);
     }
   });
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
 }
 
 function updateMinimapView() {
@@ -1951,7 +2009,7 @@ function toolUi() {
   const busy = tf || picking;
   $('brush').classList.toggle('on', !busy && !eraser); $('eraser').classList.toggle('on', !busy && eraser);
   $('tfm').classList.toggle('on', !!tf); $('pick').classList.toggle('on', picking);
-  wrap.style.cursor = eraser && !busy ? 'none' : ''; // 用範圍圈取代十字游標
+  wrap.style.cursor = picking ? 'crosshair' : (eraser && !busy ? 'none' : ''); // 滴管→十字；橡皮擦→用範圍圈取代游標
 
   // 左側垂直工具列 (Left Toolbar) 同步
   if ($('lt-brush')) $('lt-brush').classList.toggle('on', !busy && !eraser);
@@ -1974,8 +2032,8 @@ function toolUi() {
   if ($('btn-esoft-done')) $('btn-esoft-done').style.display = eraser ? 'inline-flex' : 'none';
   updateQuickBar();
 }
-$('brush').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
-$('eraser').onclick = () => { cancelEraserAutoRevert(); setEraser(!eraser); }; // 再次點擊橡皮擦可切換回筆刷
+$('brush').onclick = () => { cancelEraserAutoRevert(); endPick(); setEraser(false); };
+$('eraser').onclick = () => { cancelEraserAutoRevert(); endPick(); setEraser(!eraser); }; // 再次點擊橡皮擦可切換回筆刷
 if ($('btn-to-brush')) $('btn-to-brush').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
 if ($('btn-esoft-done')) $('btn-esoft-done').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
 if ($('et-keep')) $('et-keep').onclick = () => cancelEraserAutoRevert();
@@ -2024,10 +2082,10 @@ function delLayer(L) {
   if (cur === L) cur = layers[Math.max(0, i - 1)];
   sync();
 }
-$('del').onclick = () => delLayer(cur);
+$('del').onclick = () => { if (cur.locked) return showToast('這一層已鎖定，先解鎖才能刪除'); delLayer(cur); };
 // 清空目前圖層（可復原）：只快照有內容的範圍，空圖層直接略過
 $('clr').onclick = () => {
-  if (cur.locked) return;
+  if (cur.locked) return showToast('這一層已鎖定，先解鎖才能清空');
   const b = alphaBox(cur.c); if (!b) return;
   pushUndo({ l: cur, c: crop(cur.c, b.x, b.y, b.w, b.h), x: b.x, y: b.y });
   cur.ctx.clearRect(0, 0, W, H); dropImg(cur);
@@ -2040,7 +2098,7 @@ $('lalpha').oninput = e => { cur.c.style.opacity = e.target.value / 100; refresh
 $('merge').onclick = () => {
   const i = layers.indexOf(cur); if (i < 1) return;
   const b = layers[i - 1];
-  if (cur.locked || b.locked) return; // 鎖定中的圖層不動
+  if (cur.locked || b.locked) return showToast('鎖定中的圖層不參與合併，先解鎖再試'); // 鎖定中的圖層不動
   if (cur.visible) { b.ctx.globalAlpha = cur.c.style.opacity || 1; b.ctx.drawImage(cur.c, 0, 0); b.ctx.globalAlpha = 1; }
   const dead = cur; dead.c.remove(); layers.splice(i, 1); cur = b; forget(dead); dropImg(b);
   purge(dead); purge(b); sync(b);
@@ -2061,7 +2119,11 @@ const tfUi = () => {
 };
 const tfRender = () => { paintTf(tf.L.ctx, tf.src, tf.m); drawGuide(); tfUi(); };
 function startTf() {
-  if (tf || cur.locked) return;
+  if (tf) return;
+  if (cur.locked) { // 鎖定的圖層（含預設鎖定的底圖）先說清楚為什麼不能變形
+    showToast(cur.base ? '底圖已鎖定：先在圖層列點 🔒 解鎖，才能變形或編輯' : '這一層已鎖定：先在圖層列解鎖才能變形');
+    return;
+  }
   const L = cur, before = crop(L.c, 0, 0, W, H);
   tf = { L, before, src: L.img || before, m: { x: 0, y: 0, s: 1, r: 0, fx: 1, ...L.tf } };
   tf.m0 = L.img ? fitTf(L.img) : { ...tf.m };
@@ -2090,7 +2152,7 @@ function tfMove(e) {
   }
   tfRender();
 }
-$('tfm').onclick = () => tf ? endTf() : startTf();
+$('tfm').onclick = () => { endPick(); tf ? endTf() : startTf(); };
 $('tfok').onclick = endTf;
 $('tfs').oninput = e => { tf.m.s = e.target.value / 100; tfRender(); };
 $('tfr').oninput = e => { tf.m.r = e.target.value * Math.PI / 180; tfRender(); };
@@ -2100,17 +2162,63 @@ $('tfreset').onclick = () => { tf.m = { ...tf.m0 }; tfRender(); };
 ['aside', '#topbar'].forEach(s => document.querySelector(s).addEventListener('click', e => { if (tf && !e.target.closest('#tfbar,#tfm')) endTf(); }, true));
 addEventListener('keydown', e => { if (tf && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') endTf(); }, true);
 
-// --- 滴管：下一次點畫布取樣可見圖層的合成顏色 ---
-$('pick').onclick = () => { picking = !picking; toolUi(); drawECur(); };
-function pickColor([x, y]) {
-  picking = false; setEraser(false); // 取完色直接切回筆刷，不用再按一次
-  x = Math.floor(x); y = Math.floor(y); if (x < 0 || y < 0 || x >= W || y >= H) return;
-  const c = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
-  c.fillStyle = '#fff'; c.fillRect(0, 0, 1, 1);
-  layers.filter(l => l.visible).forEach(l => { c.globalAlpha = +(l.c.style.opacity || 1); c.drawImage(l.c, x, y, 1, 1, 0, 0, 1, 1); });
-  const d = c.getImageData(0, 0, 1, 1).data;
-  $('color').value = '#' + [d[0], d[1], d[2]].map(n => n.toString(16).padStart(2, '0')).join('');
+// --- 滴管：點畫布取樣可見圖層的合成顏色；取完色留在滴管，不自動跳回筆刷 ---
+// 取樣畫布與半徑：只讀 1 個像素等於在讀紙紋的縫隙，鉛筆稿幾乎每次都會取到接近純白；
+// 改成讀一小塊區域，再依「墨量」(1 - 亮度) 加權平均，取到的才是眼睛看到的那個顏色。
+const pickCv = Object.assign(document.createElement('canvas'), { width: 1, height: 1 });
+const pickCtx = pickCv.getContext('2d', { willReadFrequently: true });
+// 半徑跟著縮放走：放大作畫時取小一點，才不會抓到隔壁那條線
+const pickRadius = () => Math.max(2, Math.min(14, Math.round(3 / Math.max(.3, v.s))));
+
+function setBrushColor(hex) {
+  $('color').value = hex;
+  toolUi();                        // 左側前景色方塊、系統色圈一起同步
+  updateStudioSwatchesActive?.();  // 色票矩陣的高亮
+  drawECur();
 }
+
+function pickColor([cx, cy]) {
+  const x = Math.floor(cx), y = Math.floor(cy);
+  if (x < 0 || y < 0 || x >= W || y >= H) { showToast('滴管：請點在畫布範圍內'); return; }
+  const r = pickRadius(), n = r * 2 + 1;
+  if (pickCv.width !== n) { pickCv.width = n; pickCv.height = n; }
+  pickCtx.setTransform(1, 0, 0, 1, 0, 0);
+  pickCtx.globalAlpha = 1; pickCtx.globalCompositeOperation = 'source-over';
+  pickCtx.fillStyle = '#fff'; pickCtx.fillRect(0, 0, n, n);
+  // 疊法跟匯出 PNG 一致：圖層順序 + 混合模式 + 不透明度
+  layers.filter(l => l.visible).forEach(l => {
+    pickCtx.globalAlpha = +(l.c.style.opacity || 1);
+    pickCtx.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    pickCtx.drawImage(l.c, x - r, y - r, n, n, 0, 0, n, n);
+  });
+  pickCtx.globalAlpha = 1; pickCtx.globalCompositeOperation = 'source-over';
+  const d = pickCtx.getImageData(0, 0, n, n).data;
+  let sr = 0, sg = 0, sb = 0, sw = 0, ar = 0, ag = 0, ab = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const wgt = 1 - (d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114) / 255; // 越深＝墨越多
+    ar += d[i]; ag += d[i + 1]; ab += d[i + 2];
+    if (wgt <= .008) continue;
+    sr += d[i] * wgt; sg += d[i + 1] * wgt; sb += d[i + 2] * wgt; sw += wgt;
+  }
+  const cnt = d.length / 4;
+  // 整區都是白紙就退回整區平均（＝紙白），不要讓使用者覺得「按了沒反應」
+  const [rr, gg, bb] = sw > .01 ? [sr / sw, sg / sw, sb / sw] : [ar / cnt, ag / cnt, ab / cnt];
+  const hex = '#' + [rr, gg, bb].map(v2 => Math.round(Math.min(255, Math.max(0, v2))).toString(16).padStart(2, '0')).join('');
+  setBrushColor(hex);
+  showToast(`滴管取色 ${hex}　·　再點可續取，選筆刷或按 Esc 離開`, hex);
+}
+
+function endPick() {
+  if (!picking) return;
+  picking = false; toolUi(); drawECur();
+}
+$('pick').onclick = () => {
+  if (picking) { endPick(); return; }
+  cancelEraserAutoRevert();
+  eraser = false; eCur = null; // 進滴管就離開橡皮擦，取完色也不會彈回去
+  picking = true;
+  toolUi(); drawECur();
+};
 
 // --- 3D 柱體：每個可見圖層取樣成一片方塊板，由下到上（後到前）依層距排開 ---
 let stop3d = null, refresh3d = null, manPose = null;
@@ -2144,8 +2252,9 @@ async function open3d() {
   try { T = await import('three'); OC = (await import('three/addons/controls/OrbitControls.js')).OrbitControls; }
   catch { return alert('需要網路連線來載入 three.js'); }
   finally { opening = false; }
-  const box = $('m3c'), m3 = $('m3'); m3.style.display = 'flex'; $('minimap').style.display = 'none';
-  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp', 'tfm'].forEach(i => $(i).disabled = on);
+  const box = $('m3c'), m3 = $('m3'); m3.style.display = 'flex';
+  if ($('minimap')) $('minimap').style.display = 'none'; // 舊版導航器面板；現在是 #mmbox，沒有就跳過
+  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp', 'btog', 'tfm'].forEach(i => $(i).disabled = on);
   lock(true);
   const mkLs = () => layers.filter(l => l.visible && !l.guide).map(l => ({ l, px: null, mesh: null }));
   let ls = mkLs();
@@ -2382,7 +2491,8 @@ async function open3d() {
     cancelAnimationFrame(raf); raf = 0; cancelAnimationFrame(anim); removeEventListener('resize', resize);
     ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'].forEach((t, i) => box.removeEventListener(t, [down, move, up, up][i], true));
     scene.traverse(o => o.geometry?.dispose()); ls.forEach(e => e.mesh?.dispose()); [geo, mat, jmat, hot].forEach(x => x.dispose());
-    ctl.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); m3.style.display = 'none'; $('minimap').style.display = '';
+    ctl.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); m3.style.display = 'none';
+    if ($('minimap')) $('minimap').style.display = '';
     lock(false); stop3d = refresh3d = null; list();
   };
   resize(); build();
@@ -2400,7 +2510,19 @@ $('impf').onchange = async e => {
   const base = cur;
   base.img = img; base.raw = f; base.tf = fitTf(img); paintTf(base.ctx, img, base.tf);
   base.name = '底圖'; base.c.style.opacity = .5;
+  base.base = true; base.locked = true; // 底圖預設鎖定：要畫在上面或變形都得先解鎖
   cur = prev; list(base);
+  showToast('已匯入底圖並鎖定；要調整它，先在圖層列點 🔒 解鎖');
+};
+
+// 頂部工具列的底圖開關：有底圖就切換顯示／隱藏，沒有底圖就直接開匯入
+$('btog').onclick = () => {
+  const b = baseLayer();
+  if (!b) { $('imp').click(); return; }
+  b.visible = !b.visible;
+  b.c.style.display = b.visible ? '' : 'none';
+  list();
+  showToast(b.visible ? '顯示底圖' : '已隱藏底圖（圖層與鎖定狀態都保留）');
 };
 
 const download = (blob, name) => {
@@ -2438,7 +2560,7 @@ async function saveProject() {
   const meta = {
     w: W, h: H, cur: layers.indexOf(cur), guide: { ...guide },
     layers: layers.map(l => ({
-      name: l.name, visible: !!l.visible, locked: !!l.locked, opacity: +(l.c.style.opacity || 1), guide: !!l.guide, bg: !!l.bg,
+      name: l.name, visible: !!l.visible, locked: !!l.locked, opacity: +(l.c.style.opacity || 1), guide: !!l.guide, bg: !!l.bg, base: !!l.base,
       raw: withRaw && l.raw ? (l.raw.type || 'image/png') : null,
       tf: l.tf ? { ...l.tf } : null, // 底圖目前的變形，還原後才能接著微調
     })),
@@ -2487,7 +2609,8 @@ async function openProject(file) {
     c.style.opacity = m.opacity != null && m.opacity < 1 ? m.opacity : '';
     // 有帶著原始檔就還原成可無損再變形的底圖（.tf 沿用預設，之後再變形會重新算）
     const L = { c, ctx, name: m.name || ('圖層 ' + (i + 1)), visible: m.visible !== false, locked: !!m.locked, guide: !!m.guide, raw: raws[i], tf: m.tf || undefined,
-      bg: !!m.bg || (i === 0 && m.name === '背景') }; // 舊專案沒有 bg 旗標，用名稱推斷
+      bg: !!m.bg || (i === 0 && m.name === '背景'), // 舊專案沒有 bg 旗標，用名稱推斷
+      base: m.base != null ? !!m.base : !!raws[i] }; // 舊專案沒有 base 旗標：帶原圖的圖層就當底圖
     if (raws[i]) L.img = await createImageBitmap(raws[i]).catch(() => null);
     made.push(L);
   }
@@ -2495,7 +2618,7 @@ async function openProject(file) {
   thumbs.clear();
   layers = made; n = made.length;
   cur = layers[Math.min(Math.max(0, meta.cur | 0), layers.length - 1)];
-  undos = []; redos = [];
+  undos = []; redos = []; syncUndoBtns();
   $('gmode').value = String(guide.mode || 0);
   sync(); fit(); sizeUi();
 }
@@ -2583,7 +2706,7 @@ function resizeDoc(w, h) {
     L.c.remove(); L.c = c; L.ctx = x;
   });
   guide.hy += dy; guide.v1 += dx; guide.v2 += dx; guide.v3x += dx; guide.v3y += dy;
-  setDocSize(w, h); thumbs.clear(); undos = []; redos = [];
+  setDocSize(w, h); thumbs.clear(); undos = []; redos = []; syncUndoBtns();
   sync(); fit(); sizeUi();
 }
 
@@ -2591,7 +2714,7 @@ function createNewDoc(w, h, bgWhite = true) {
   stop3d?.(); endTf?.();
   layers.forEach(l => { l.c.remove(); dropImg(l); });
   thumbs.clear();
-  layers = []; n = 0; undos = []; redos = [];
+  layers = []; n = 0; undos = []; redos = []; syncUndoBtns();
   setDocSize(w, h);
   addLayer(bgWhite); // 底層白色背景
   addLayer(false);   // 圖層 1
@@ -2607,7 +2730,7 @@ async function openImageAsNewDoc(file) {
   stop3d?.(); endTf?.();
   layers.forEach(l => { l.c.remove(); dropImg(l); });
   thumbs.clear();
-  layers = []; n = 0; undos = []; redos = [];
+  layers = []; n = 0; undos = []; redos = []; syncUndoBtns();
   setDocSize(w, h);
 
   const c0 = Object.assign(document.createElement('canvas'), { width: w, height: h }), ctx0 = c0.getContext('2d');
@@ -3062,10 +3185,7 @@ function initStudioSwatches() {
     sw.title = hex;
     sw.onclick = () => {
       $('color').value = hex;
-      if (eraser) {
-        cancelEraserAutoRevert();
-        setEraser(false);
-      }
+      ensureBrushMode(); // 手動點色票＝離開滴管／橡皮擦
       toolUi();
       updateStudioSwatchesActive();
     };
@@ -3094,6 +3214,7 @@ function initStudioWorkspace() {
   if ($('lt-color-picker')) {
     $('lt-color-picker').oninput = e => {
       $('color').value = e.target.value;
+      ensureBrushMode();
       toolUi();
       updateStudioSwatchesActive();
     };

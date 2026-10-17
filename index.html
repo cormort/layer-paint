@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=stepper1">
+  <link rel="stylesheet" href="style.css?v=opt3">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -29,6 +29,7 @@
   </div>
   <div id="m3c"></div>
 </div>
+<div id="tool-toast" class="tool-toast" role="status" aria-live="polite"><span id="tt-swatch" class="tt-swatch"></span><span id="tt-text"></span></div>
 <header id="topbar">
   <button id="btn-new-doc" class="btn-new-doc" title="新增畫布／紙張尺寸選擇 (⌘N)">📄 新畫布</button>
   <button id="popen" title="開啟先前存的 .lpaint 專案">開專案</button>
@@ -37,6 +38,7 @@
     <input id="praw" type="checkbox" checked> 含原圖</label>
   <button id="save">匯出 PNG</button>
   <button id="imp" title="匯入圖片當底圖（放在最底層之上）">匯入底圖</button>
+  <button id="btog" class="btn-basetog" title="顯示／隱藏底圖（參考圖）；沒有底圖時點擊＝匯入">👁️ 底圖</button>
   <input id="pfile" type="file" hidden>
   <input id="impf" type="file" accept="image/*" hidden>
   <span class="sep"></span>
@@ -467,6 +469,6 @@
     </section>
   </aside>
 </div>
-<script src="app.js?v=stepper1"></script>
+<script src="app.js?v=opt3"></script>
 </body>
 </html>
