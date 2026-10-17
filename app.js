@@ -2271,6 +2271,8 @@ function buildEdgeMap() {
 }
 
 // 吸附：附近找梯度最強的格點；越遠的邊要越強才吸得動，免得路徑亂跳
+// snapHit：上一次有沒有吸到邊。吸到就放寬一次半徑（磁滯），避免剛好在臨界距離時一下吸、一下不吸的鋸齒
+let snapHit = true;
 function snapEdge(x, y, rad) {
   const m = edgeMap; if (!m) return [x, y];
   const { w, h, s, mag } = m;
@@ -2289,7 +2291,8 @@ function snapEdge(x, y, rad) {
       if (score > best) { best = score; bx = i; by = j; }
     }
   }
-  if (best < .08) return [x, y]; // 附近太平（空白紙）：就照手的原樣走
+  if (best < .08) { snapHit = false; return [x, y]; } // 附近太平（空白紙）：就照手的原樣走
+  snapHit = true;
   return [bx * s + s / 2, by * s + s / 2];
 }
 
@@ -2303,6 +2306,24 @@ function decimatePts(pts, maxN = 500) {
   for (let i = 0; i < pts.length; i += k) out.push(pts[i]);
   if (out[out.length - 1] !== pts[pts.length - 1]) out.push(pts[pts.length - 1]);
   return out;
+}
+
+// 箱型濾波：削掉吸附在格子之間來回跳的鋸齒（1～2 個取樣點寬），Chaikin 才不會把抖動一起留著
+function avgPts(pts, win = 2) {
+  if (pts.length < win * 2 + 1) return pts;
+  const out = new Array(pts.length);
+  for (let i = 0; i < pts.length; i++) {
+    let sx = 0, sy = 0, n = 0;
+    for (let k = -win; k <= win; k++) { const q = pts[i + k]; if (q) { sx += q[0]; sy += q[1]; n++; } }
+    out[i] = [sx / n, sy / n];
+  }
+  return out;
+}
+
+// 路徑整理：降取樣 → 去鋸齒 → Chaikin 細分
+function prepPath(pts, maxN) {
+  const p = avgPts(decimatePts(pts, maxN), 2);
+  return smoothPts(p, magnetSmoothP());
 }
 
 // Chaikin 細分：折線 → 順滑曲線
@@ -2326,7 +2347,7 @@ function drawMagnetPreview() {
   const [c, d] = prep(mcv);
   if (!mPath || mPath.length < 2) { mcv.style.display = 'none'; return; }
   mcv.style.display = '';
-  const pts = smoothPts(decimatePts(mPath, 400), magnetSmoothP()).map(([x, y]) => toStage(x, y));
+  const pts = prepPath(mPath, 400).map(([x, y]) => toStage(x, y));
   const lw = magnetWidth() * v.s;
   c.setTransform(d, 0, 0, d, 0, 0);
   c.lineCap = 'round'; c.lineJoin = 'round';
@@ -2341,19 +2362,21 @@ function startMagnet([x, y]) {
   if (cur.locked) { showToast(cur.base ? '底圖已鎖定：先在圖層列點 🔒 解鎖才能描邊' : '「' + cur.name + '」已鎖定：先解鎖才能描邊'); return; }
   buildEdgeMap();
   mActive = true;
-  mPath = [snapEdge(x, y, magnetRadius())];
+  snapHit = true; // 起筆先用放寬後（×1.6）的半徑去咬邊，比較容易咬上
+  mPath = [snapEdge(x, y, magnetRadius() * 1.6)];
   drawMagnetPreview();
 }
 
 function magnetMove([x, y]) {
   if (!mActive || !mPath) return;
   const last = mPath[mPath.length - 1];
-  const to = snapEdge(x, y, magnetRadius());
+  const rad = magnetRadius() * (snapHit ? 1.6 : 1); // 吸住了就放寬一點，形成磁滯
+  const to = snapEdge(x, y, rad);
   const d = Math.hypot(to[0] - last[0], to[1] - last[1]);
   if (d < 1.5) return;
   // 快速拖曳時把手感取樣點補起來，吸附才會沿著邊一段一段走，而不是跳成直線
   const n = Math.min(20, Math.max(1, Math.ceil(d / 6)));
-  for (let i = 1; i <= n; i++) mPath.push(snapEdge(last[0] + (to[0] - last[0]) * i / n, last[1] + (to[1] - last[1]) * i / n, magnetRadius()));
+  for (let i = 1; i <= n; i++) mPath.push(snapEdge(last[0] + (to[0] - last[0]) * i / n, last[1] + (to[1] - last[1]) * i / n, rad));
   drawMagnetPreview();
 }
 
@@ -2362,7 +2385,7 @@ function commitMagnet() {
   const raw = mPath; mPath = null;
   const [mc] = prep(mcv); mc.clearRect(0, 0, mcv.width, mcv.height); mcv.style.display = 'none';
   if (!raw || raw.length < 2 || !cur || cur.locked) return;
-  const pts = smoothPts(decimatePts(raw, 700), magnetSmoothP());
+  const pts = prepPath(raw, 700);
   const lw = magnetWidth(), pad = lw + 4;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   pts.forEach(([x, y]) => { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; });
