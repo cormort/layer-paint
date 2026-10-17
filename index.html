@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt3">
+  <link rel="stylesheet" href="style.css?v=opt4">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -46,8 +46,8 @@
   <select id="vsize" aria-label="版面尺寸" style="display:none"></select>
   <button id="vori" title="切換直式／橫式">直式</button>
   <span class="spacer"></span>
-  <div class="seg">
-    <button id="brush" class="on">筆刷</button><button id="eraser" title="橡皮擦工具 (E)；點擊秒數標籤可調整倒數時間">橡皮擦<span id="eraser-delay-badge" class="eraser-delay-badge" title="點擊調整切換秒數 (1s/2s/3s/5s/關閉)">2s</span></button><button id="tfm">變形</button><button id="pick">滴管</button>
+  <div class="seg" id="toolseg">
+    <button id="brush" class="on">筆刷</button><button id="eraser" title="橡皮擦工具 (E)；點擊秒數標籤可調整倒數時間">橡皮擦<span id="eraser-delay-badge" class="eraser-delay-badge" title="點擊調整切換秒數 (1s/2s/3s/5s/關閉)">2s</span></button><button id="tfm">變形</button><button id="pick">滴管</button><button id="mtog" title="磁力描邊：沿著輪廓拖曳，線會吸附到邊緣 (M)">描邊</button>
   </div>
   <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button>
   <span class="sep"></span>
@@ -211,16 +211,28 @@
       <span class="lt-kbd">B</span>
     </button>
     <button id="lt-eraser" class="lt-btn" type="button" title="橡皮擦工具 (E)">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M19 14l-7 7-9-9 7-7 9 9zM18 13l-5-5"/>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m7 21-4.3-4.3a2.4 2.4 0 0 1 0-3.4l9.6-9.6a2.4 2.4 0 0 1 3.4 0l5.6 5.6a2.4 2.4 0 0 1 0 3.4L13 21"/>
+        <path d="M22 21H7"/>
+        <path d="m5 11 9 9"/>
       </svg>
       <span class="lt-kbd">E</span>
     </button>
     <button id="lt-pick" class="lt-btn" type="button" title="滴管吸色工具 (I)">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M14 4l6 6-9 9H5v-6l9-9zM19 9l-4-4"/>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m2 22 1-1h3l9-9"/>
+        <path d="M3 21v-3l9-9"/>
+        <path d="M15 6l3.4-3.4a2.1 2.1 0 0 1 3 3L18 9l.4.4a2.1 2.1 0 0 1-3 3l-3.8-3.8a2.1 2.1 0 0 1 3-3z"/>
       </svg>
       <span class="lt-kbd">I</span>
+    </button>
+    <button id="lt-magnet" class="lt-btn" type="button" title="磁力描邊工具 (M)：沿輪廓拖曳就會吸附到邊緣">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 15 2 11l6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15"/>
+        <path d="m5 8 4 4"/>
+        <path d="m12 15 4 4"/>
+      </svg>
+      <span class="lt-kbd">M</span>
     </button>
     <button id="lt-pan" class="lt-btn" type="button" title="抓手平移工具 (H / 空白鍵)">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -442,8 +454,20 @@
       </div>
       <select id="gmode" aria-label="透視輔助線">
         <option value="0">關閉</option><option value="1">1 點透視</option><option value="2">2 點透視</option><option value="3">3 點透視</option></select>
+      <p class="hint" style="margin:0;line-height:1.45">拖曳圓點調整：<span style="color:#fc0">●</span> 地平線高度　<span style="color:#e33">●</span> 消失點　<span style="color:#36f">●</span> 第三消失點（可拖到畫布外）</p>
       <label>線數 <input id="gn" type="range" min="4" max="48" value="16"></label>
       <button id="gbake">存成圖層</button>
+    </section>
+
+    <!-- 5. 磁力描邊 -->
+    <section class="grp panel-dock" id="sec-magnet">
+      <div class="panel-header">
+        <span class="panel-title">磁力描邊</span>
+        <button id="magnet-quick" class="btn-subtle" type="button" title="啟用／關閉磁力描邊 (M)">啟用</button>
+      </div>
+      <p class="hint" style="margin:0;line-height:1.45">沿著輪廓拖曳，線會吸到最近的最強邊緣；放手即完成一筆（可復原）。線寬用「大小」、顏色用前景色。</p>
+      <label>吸附半徑 <input id="mradius" type="range" min="4" max="40" value="14"><span id="mradius-val">14px</span></label>
+      <label>平滑 <input id="msmooth" type="range" min="0" max="100" value="55"><span id="msmooth-val">55</span></label>
     </section>
 
     <!-- 5. iPad & Apple Pencil -->
@@ -469,6 +493,6 @@
     </section>
   </aside>
 </div>
-<script src="app.js?v=opt3"></script>
+<script src="app.js?v=opt4"></script>
 </body>
 </html>

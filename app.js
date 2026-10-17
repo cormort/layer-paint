@@ -107,7 +107,7 @@ function rotateV(cx, cy, da) {
   v.x = x + dx * c - dy * s; v.y = y + dx * s + dy * c; v.r += da;
 }
 // --- 透視輔助線：地平線與消失點可拖曳（座標用畫布像素），畫在 stage 上方的獨立覆蓋層 ---
-const guide = { mode: 0, hy: 800, v1: 250, v2: 1000, v3x: 600, v3y: 3200 };
+const guide = { mode: 0, hy: 800, v1: 250, v2: 1000, v3x: 600, v3y: 80 };
 // 兩層覆蓋畫布：輔助線／變形外框一層，橡皮擦游標一層。
 // 游標只是跟著筆移動，不該連同最多 144 條透視線一起重畫。
 const overlay = () => {
@@ -115,8 +115,9 @@ const overlay = () => {
   c.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
   stage.append(c); return c;
 };
-const gcv = overlay(), ecv = overlay();
-gcv.id = 'gcv'; ecv.id = 'ecv';
+const gcv = overlay(), ecv = overlay(), mcv = overlay();
+gcv.id = 'gcv'; ecv.id = 'ecv'; mcv.id = 'mcv';
+mcv.style.display = 'none'; // 磁力描邊的即時預覽；平常不佔合成層
 // 依 DPR 配置覆蓋層；尺寸沒變就只清空
 function prep(cv) {
   const d = devicePixelRatio || 1, [w, h] = stageSize(), bw = Math.round(w * d), bh = Math.round(h * d), c = cv.getContext('2d');
@@ -125,7 +126,8 @@ function prep(cv) {
   return [c, d];
 }
 const gHandles = () => {
-  const h = [{ id: 'hy', x: 40, y: guide.hy }, { id: 'v1', x: guide.v1, y: guide.hy }];
+  // 地平線兩端各放一個黃點，兩顆都能上下拖：放大作畫時另一端常常跑出畫面，只給一顆會「抓不到」
+  const h = [{ id: 'hy', x: 40, y: guide.hy }, { id: 'hy', x: Math.max(80, W - 40), y: guide.hy }, { id: 'v1', x: guide.v1, y: guide.hy }];
   if (guide.mode > 1) h.push({ id: 'v2', x: guide.v2, y: guide.hy });
   if (guide.mode > 2) h.push({ id: 'v3', x: guide.v3x, y: guide.v3y });
   return h;
@@ -828,6 +830,7 @@ function setEraser(state) {
 function ensureBrushMode() {
   cancelEraserAutoRevert();
   endPick();               // 手動換色＝離開滴管
+  endMagnet();             // 也離開磁力描邊：換色代表要回到筆刷
   if (eraser) setEraser(false);
 }
 
@@ -1574,6 +1577,7 @@ stage.onpointerdown = e => {
   stage.setPointerCapture(e.pointerId);
   if (tf) { tfPts.set(e.pointerId, [e.clientX, e.clientY]); return; }
   if (picking && !touches.size) { pickColor(pos(e)); return; }
+  if (magnet) { mPid = e.pointerId; startMagnet(pos(e)); return; }
   if (guide.mode) { // 先檢查是否按在消失點／地平線把手上
     const r = stageRect(), px = e.clientX - r.left, py = e.clientY - r.top, R = e.pointerType === 'touch' ? 30 : 16;
     const h = gHandles().find(p => { const [hx, hy] = toStage(p.x, p.y); return Math.hypot(hx - px, hy - py) < R; });
@@ -1632,10 +1636,15 @@ stage.onpointermove = e => {
     showHoverCur(e);
   }
   if (tf) return tfMove(e);
+  if (magnet && mActive) { if (e.pointerId === mPid) magnetMove(pos(e)); return; }
   if (gdrag) {
     if (e.pointerId === gdrag.pid) {
       const p = pos(e), id = gdrag.id;
-      if (id === 'hy') guide.hy = p[1]; else if (id === 'v3') { guide.v3x = p[0]; guide.v3y = p[1]; } else guide[id] = p[0];
+      // 黃點＝地平線高度；紅／綠消失點沿地平線左右移動，上下拖就等於整條地平線一起升降
+      // （消失點永遠在地平線上，只鎖單一軸會讓人覺得「拖不動」）；藍點是三點透視的第三消失點，可自由拖
+      if (id === 'hy') guide.hy = p[1];
+      else if (id === 'v3') { guide.v3x = p[0]; guide.v3y = p[1]; }
+      else { guide[id] = p[0]; guide.hy = p[1]; }
       drawGuide();
     }
     return;
@@ -1665,6 +1674,7 @@ stage.onpointermove = e => {
 const endPointer = (e, cancelled) => {
   if (e.pointerType === 'touch' && eCur) { eCur = null; drawECur(); }
   if (tf) { tfPts.delete(e.pointerId); return; }
+  if (magnet && mActive && e.pointerId === mPid) { commitMagnet(); return; }
   const wasTouch = touches.delete(e.pointerId); pan = null;
   if (wasTouch && !touches.size && tap) {
     if (!tap.moved && performance.now() - tap.t < 350 && tap.n >= 2) $(tap.n === 2 ? 'undo' : 'redo').click();
@@ -1830,6 +1840,7 @@ addEventListener('keydown', e => {
         closeNewDocModal();
         return;
       }
+      if (magnet) { e.preventDefault(); endMagnet(); return; }
       if (picking) { // Esc 先離開滴管，不必再回頭按一次滴管
         e.preventDefault();
         endPick();
@@ -1843,12 +1854,12 @@ addEventListener('keydown', e => {
     } else if (e.key === 'b' || e.key === 'B') {
       e.preventDefault();
       cancelEraserAutoRevert();
-      endPick();
+      endPick(); endMagnet();
       setEraser(false);
     } else if (e.key === 'e' || e.key === 'E') {
       e.preventDefault();
       cancelEraserAutoRevert();
-      endPick();
+      endPick(); endMagnet();
       setEraser(!eraser);
     } else if (e.key === 'v' || e.key === 'V') {
       e.preventDefault();
@@ -1856,6 +1867,9 @@ addEventListener('keydown', e => {
     } else if (e.key === 'i' || e.key === 'I') {
       e.preventDefault();
       $('pick').click();
+    } else if (e.key === 'm' || e.key === 'M') {
+      e.preventDefault();
+      $('mtog').click();
     } else if (e.key === 'h' || e.key === 'H') {
       e.preventDefault();
       fit();
@@ -2006,10 +2020,16 @@ if ($('mmfit')) $('mmfit').onclick = fit;
 
 // 工具列一次只亮一個：變形或滴管進行中時，筆刷/橡皮擦先暗下來
 function toolUi() {
-  const busy = tf || picking;
+  const busy = tf || picking || magnet;
   $('brush').classList.toggle('on', !busy && !eraser); $('eraser').classList.toggle('on', !busy && eraser);
   $('tfm').classList.toggle('on', !!tf); $('pick').classList.toggle('on', picking);
-  wrap.style.cursor = picking ? 'crosshair' : (eraser && !busy ? 'none' : ''); // 滴管→十字；橡皮擦→用範圍圈取代游標
+  if ($('mtog')) $('mtog').classList.toggle('on', magnet);
+  if ($('magnet-quick')) {
+    $('magnet-quick').textContent = magnet ? '關閉' : '啟用';
+    $('magnet-quick').classList.toggle('on', magnet);
+  }
+  if ($('lt-magnet')) $('lt-magnet').classList.toggle('on', magnet);
+  wrap.style.cursor = (picking || magnet) ? 'crosshair' : (eraser && !busy ? 'none' : ''); // 滴管／描邊→十字；橡皮擦→用範圍圈取代游標
 
   // 左側垂直工具列 (Left Toolbar) 同步
   if ($('lt-brush')) $('lt-brush').classList.toggle('on', !busy && !eraser);
@@ -2032,8 +2052,8 @@ function toolUi() {
   if ($('btn-esoft-done')) $('btn-esoft-done').style.display = eraser ? 'inline-flex' : 'none';
   updateQuickBar();
 }
-$('brush').onclick = () => { cancelEraserAutoRevert(); endPick(); setEraser(false); };
-$('eraser').onclick = () => { cancelEraserAutoRevert(); endPick(); setEraser(!eraser); }; // 再次點擊橡皮擦可切換回筆刷
+$('brush').onclick = () => { cancelEraserAutoRevert(); endPick(); endMagnet(); setEraser(false); };
+$('eraser').onclick = () => { cancelEraserAutoRevert(); endPick(); endMagnet(); setEraser(!eraser); }; // 再次點擊橡皮擦可切換回筆刷
 if ($('btn-to-brush')) $('btn-to-brush').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
 if ($('btn-esoft-done')) $('btn-esoft-done').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
 if ($('et-keep')) $('et-keep').onclick = () => cancelEraserAutoRevert();
@@ -2152,7 +2172,7 @@ function tfMove(e) {
   }
   tfRender();
 }
-$('tfm').onclick = () => { endPick(); tf ? endTf() : startTf(); };
+$('tfm').onclick = () => { endPick(); endMagnet(); tf ? endTf() : startTf(); };
 $('tfok').onclick = endTf;
 $('tfs').oninput = e => { tf.m.s = e.target.value / 100; tfRender(); };
 $('tfr').oninput = e => { tf.m.r = e.target.value * Math.PI / 180; tfRender(); };
@@ -2214,11 +2234,176 @@ function endPick() {
 }
 $('pick').onclick = () => {
   if (picking) { endPick(); return; }
-  cancelEraserAutoRevert();
+  cancelEraserAutoRevert(); endMagnet();
   eraser = false; eCur = null; // 進滴管就離開橡皮擦，取完色也不會彈回去
   picking = true;
   toolUi(); drawECur();
 };
+
+// --- 磁力描邊：沿著底稿輪廓吸附，快速把邊描成線（類似磁性套索／磁力曲線）---
+// 做法：把可見圖層合成成一張縮小的灰階圖算 Sobel 梯度，拖曳時每個取樣點都往附近梯度最強的位置吸，
+// 放手才把整條（平滑後的）路徑用目前的顏色與「大小」畫成筆畫，一筆一個復原步驟。
+let magnet = false, mActive = false, mPid = null, mPath = null, edgeMap = null;
+
+function buildEdgeMap() {
+  const s = Math.max(1, Math.round(Math.max(W, H) / 900)); // 長邊約 900 格：夠準又不會拖慢起始
+  const w = Math.max(3, Math.round(W / s)), h = Math.max(3, Math.round(H / s));
+  const c = Object.assign(document.createElement('canvas'), { width: w, height: h });
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+  layers.filter(l => l.visible).forEach(l => {
+    g.globalAlpha = +(l.c.style.opacity || 1);
+    g.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    g.drawImage(l.c, 0, 0, w, h);
+  });
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  const d = g.getImageData(0, 0, w, h).data;
+  const lum = new Float32Array(w * h), mag = new Float32Array(w * h);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) lum[j] = (d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114) / 255;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x;
+    const gx = (lum[i - w + 1] + 2 * lum[i + 1] + lum[i + w + 1]) - (lum[i - w - 1] + 2 * lum[i - 1] + lum[i + w - 1]);
+    const gy = (lum[i + w - 1] + 2 * lum[i + w] + lum[i + w + 1]) - (lum[i - w - 1] + 2 * lum[i - w] + lum[i - w + 1]);
+    mag[i] = Math.sqrt(gx * gx + gy * gy);
+  }
+  edgeMap = { w, h, s, mag };
+  return edgeMap;
+}
+
+// 吸附：附近找梯度最強的格點；越遠的邊要越強才吸得動，免得路徑亂跳
+function snapEdge(x, y, rad) {
+  const m = edgeMap; if (!m) return [x, y];
+  const { w, h, s, mag } = m;
+  const cx = Math.round(x / s), cy = Math.round(y / s), rr = Math.max(1, Math.round(rad / s));
+  let best = -1, bx = cx, by = cy;
+  const r2 = rr * rr;
+  for (let j = cy - rr; j <= cy + rr; j++) {
+    if (j < 1 || j > h - 2) continue;
+    const row = j * w;
+    for (let i = cx - rr; i <= cx + rr; i++) {
+      if (i < 1 || i > w - 2) continue;
+      const dx = i - cx, dy = j - cy, d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      // 線性距離懲罰（以畫布像素計）：強邊可以從遠一點吸過來，弱邊只吸手邊的
+      const score = mag[row + i] - Math.sqrt(d2) * s * .02;
+      if (score > best) { best = score; bx = i; by = j; }
+    }
+  }
+  if (best < .08) return [x, y]; // 附近太平（空白紙）：就照手的原樣走
+  return [bx * s + s / 2, by * s + s / 2];
+}
+
+const magnetRadius = () => +($('mradius')?.value || 14);
+const magnetSmoothP = () => Math.min(3, Math.round((+($('msmooth')?.value ?? 55)) / 34)); // 0~3 次細分
+
+// 抽稀：長路徑先降取樣，細分＋預覽才不會越拖越慢
+function decimatePts(pts, maxN = 500) {
+  if (pts.length <= maxN) return pts;
+  const k = Math.ceil(pts.length / maxN), out = [];
+  for (let i = 0; i < pts.length; i += k) out.push(pts[i]);
+  if (out[out.length - 1] !== pts[pts.length - 1]) out.push(pts[pts.length - 1]);
+  return out;
+}
+
+// Chaikin 細分：折線 → 順滑曲線
+function smoothPts(pts, passes) {
+  let p = pts;
+  for (let k = 0; k < passes && p.length > 2; k++) {
+    const q = [p[0]];
+    for (let i = 0; i < p.length - 1; i++) {
+      const a = p[i], b = p[i + 1];
+      q.push([a[0] * .75 + b[0] * .25, a[1] * .75 + b[1] * .25], [a[0] * .25 + b[0] * .75, a[1] * .25 + b[1] * .75]);
+    }
+    q.push(p[p.length - 1]);
+    p = q;
+  }
+  return p;
+}
+
+function magnetWidth() { return Math.max(1, width({ pointerType: 'mouse' })); }
+
+function drawMagnetPreview() {
+  const [c, d] = prep(mcv);
+  if (!mPath || mPath.length < 2) { mcv.style.display = 'none'; return; }
+  mcv.style.display = '';
+  const pts = smoothPts(decimatePts(mPath, 400), magnetSmoothP()).map(([x, y]) => toStage(x, y));
+  const lw = magnetWidth() * v.s;
+  c.setTransform(d, 0, 0, d, 0, 0);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = 'rgba(0,0,0,.5)'; c.lineWidth = lw + 2 * d; // 深色外圈：淺色鉛筆在深底也看得到
+  c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke();
+  c.strokeStyle = $('color').value; c.lineWidth = Math.max(1, lw);
+  c.stroke();
+}
+
+function startMagnet([x, y]) {
+  if (!cur) return;
+  if (cur.locked) { showToast(cur.base ? '底圖已鎖定：先在圖層列點 🔒 解鎖才能描邊' : '「' + cur.name + '」已鎖定：先解鎖才能描邊'); return; }
+  buildEdgeMap();
+  mActive = true;
+  mPath = [snapEdge(x, y, magnetRadius())];
+  drawMagnetPreview();
+}
+
+function magnetMove([x, y]) {
+  if (!mActive || !mPath) return;
+  const last = mPath[mPath.length - 1];
+  const to = snapEdge(x, y, magnetRadius());
+  const d = Math.hypot(to[0] - last[0], to[1] - last[1]);
+  if (d < 1.5) return;
+  // 快速拖曳時把手感取樣點補起來，吸附才會沿著邊一段一段走，而不是跳成直線
+  const n = Math.min(20, Math.max(1, Math.ceil(d / 6)));
+  for (let i = 1; i <= n; i++) mPath.push(snapEdge(last[0] + (to[0] - last[0]) * i / n, last[1] + (to[1] - last[1]) * i / n, magnetRadius()));
+  drawMagnetPreview();
+}
+
+function commitMagnet() {
+  mActive = false; mPid = null;
+  const raw = mPath; mPath = null;
+  const [mc] = prep(mcv); mc.clearRect(0, 0, mcv.width, mcv.height); mcv.style.display = 'none';
+  if (!raw || raw.length < 2 || !cur || cur.locked) return;
+  const pts = smoothPts(decimatePts(raw, 700), magnetSmoothP());
+  const lw = magnetWidth(), pad = lw + 4;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  pts.forEach(([x, y]) => { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; });
+  const bx = Math.max(0, Math.floor(x0 - pad)), by = Math.max(0, Math.floor(y0 - pad));
+  const bw = Math.min(W - bx, Math.ceil(x1 + pad) - bx), bh = Math.min(H - by, Math.ceil(y1 + pad) - by);
+  if (bw <= 0 || bh <= 0) return;
+  pushUndo({ l: cur, c: crop(cur.c, bx, by, bw, bh), x: bx, y: by });
+  dropImg(cur); // 描過就沒有原始圖檔可以無損再變形了（跟自由筆畫一致）
+  const ctx = cur.ctx;
+  ctx.save();
+  ctx.globalAlpha = Math.max(.05, +$('alpha').value / 100);
+  ctx.strokeStyle = $('color').value;
+  ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+  ctx.restore();
+  list(cur); refresh3d?.(cur);
+}
+
+function endMagnet() {
+  if (!magnet) return;
+  magnet = false; mActive = false; mPid = null; mPath = null;
+  if (mcv) { const [c] = prep(mcv); c.clearRect(0, 0, mcv.width, mcv.height); mcv.style.display = 'none'; }
+  toolUi(); drawECur();
+}
+
+$('mtog').onclick = () => {
+  if (magnet) { endMagnet(); return; }
+  cancelEraserAutoRevert(); endPick();
+  eraser = false; eCur = null; magnet = true;
+  toolUi(); drawECur();
+};
+if ($('lt-magnet')) $('lt-magnet').onclick = () => $('mtog').click();
+if ($('magnet-quick')) $('magnet-quick').onclick = () => $('mtog').click();
+// 兩個滑桿的數值顯示 + 記住設定
+['mradius', 'msmooth'].forEach(id => {
+  const el = $(id), val = $(id + '-val'); if (!el) return;
+  try { const sv = localStorage.getItem('magnet_' + id); if (sv != null) el.value = sv; } catch {}
+  const sync = () => { if (val) val.textContent = id === 'mradius' ? el.value + 'px' : el.value; };
+  el.oninput = () => { sync(); try { localStorage.setItem('magnet_' + id, el.value); } catch {} };
+  sync();
+});
 
 // --- 3D 柱體：每個可見圖層取樣成一片方塊板，由下到上（後到前）依層距排開 ---
 let stop3d = null, refresh3d = null, manPose = null;
@@ -2246,7 +2431,7 @@ const JOINTS = [
 let opening = false;
 async function open3d() {
   if (stop3d || opening) return; // 載入 three.js 期間重複點擊不要開第二個
-  endTf();
+  endTf(); endMagnet?.();
   opening = true;
   let T, OC;
   try { T = await import('three'); OC = (await import('three/addons/controls/OrbitControls.js')).OrbitControls; }
@@ -2254,7 +2439,7 @@ async function open3d() {
   finally { opening = false; }
   const box = $('m3c'), m3 = $('m3'); m3.style.display = 'flex';
   if ($('minimap')) $('minimap').style.display = 'none'; // 舊版導航器面板；現在是 #mmbox，沒有就跳過
-  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp', 'btog', 'tfm'].forEach(i => $(i).disabled = on);
+  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp', 'btog', 'mtog', 'tfm'].forEach(i => $(i).disabled = on);
   lock(true);
   const mkLs = () => layers.filter(l => l.visible && !l.guide).map(l => ({ l, px: null, mesh: null }));
   let ls = mkLs();
