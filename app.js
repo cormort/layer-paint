@@ -1579,7 +1579,7 @@ stage.onpointerdown = e => {
   if (tf) { tfPts.set(e.pointerId, [e.clientX, e.clientY]); return; }
   if (picking && !touches.size) { pickColor(pos(e)); return; }
   if (magnet) { mPid = e.pointerId; startMagnet(pos(e), e.clientX, e.clientY); return; }
-  if (bucket) { const p = pos(e); bucketFill(p[0], p[1]); return; }
+  if (bucket) { const p = pos(e); bucketFill(p[0], p[1], e.shiftKey); return; }
   if (guide.mode) { // 先檢查是否按在消失點／地平線把手上
     const r = stageRect(), px = e.clientX - r.left, py = e.clientY - r.top, R = e.pointerType === 'touch' ? 30 : 16;
     const h = gHandles().find(p => { const [hx, hy] = toStage(p.x, p.y); return Math.hypot(hx - px, hy - py) < R; });
@@ -2521,7 +2521,7 @@ function bucketSource() {
   return g.getImageData(0, 0, W, H).data;
 }
 
-function bucketFill(cx, cy) {
+function bucketFill(cx, cy, forceGlobal) {
   if (!cur) return;
   if (cur.locked) {
     showToast(cur.base ? '底圖已鎖定：先在圖層列點 🔒 解鎖才能填色' : '「' + cur.name + '」已鎖定：先解鎖才能填色');
@@ -2536,8 +2536,9 @@ function bucketFill(cx, cy) {
     const i = p * 4;
     return Math.abs(src[i] - r0) <= tol && Math.abs(src[i + 1] - g0) <= tol && Math.abs(src[i + 2] - b0) <= tol;
   };
-  // 收邊：把「非種子色」的牆加粗 1~N px，順便封掉描線首尾沒接好留下的小缺口
-  const closePx = Math.max(0, Math.min(4, +($('bclose')?.value ?? 1)));
+  // 「邊界線寬」＝使用者輪廓線的粗細：牆加粗半個線寬（封住同寬缺口），填完再往線裡壓半個線寬（消掉白邊）
+  const lwPx = Math.max(0, Math.min(12, +($('bwide')?.value ?? 3)));
+  const closePx = lwPx; // 牆加粗整個線寬 → 可以封住 2 倍線寬的缺口
   let barrier = null;
   if (closePx > 0) {
     barrier = new Uint8Array(W * H);
@@ -2564,7 +2565,7 @@ function bucketFill(cx, cy) {
   const canFill = barrier ? (p => !barrier[p] && match(p)) : match;
   const mask = new Uint8Array(W * H);
   let x0 = sx, y0 = sy, x1 = sx, y1 = sy, count = 0;
-  if ($('bcont')?.checked !== false) {
+  if (!forceGlobal && $('bcont')?.checked !== false) {
     const stack = [[sx, sy]];
     while (stack.length) {
       const [x, y] = stack.pop(), row = y * W;
@@ -2591,6 +2592,39 @@ function bucketFill(cx, cy) {
       const x = p % W, y = (p - x) / W;
       if (x < x0) x0 = x; if (x > x1) x1 = x;
       if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  // 往線裡壓：把遮罩再長 closePx 圈，但不吃「明顯是線」的像素，
+  // 這樣填色會貼到輪廓的邊，不會在線邊留下一圈白邊，也不會跨過線
+  if (closePx > 0 && count) {
+    const lum0 = .299 * r0 + .587 * g0 + .114 * b0;
+    // 只往「跟種子色差不多亮度」的像素長（輪廓的抗鋸齒邊），碰到線（暗很多）就停 → 不會跨過線
+    const fringe = new Uint8Array(W * H);
+    for (let p = 0; p < W * H; p++) {
+      const i = p * 4;
+      fringe[p] = Math.abs(.299 * src[i] + .587 * src[i + 1] + .114 * src[i + 2] - lum0) <= 60 ? 0 : 1;
+    }
+    for (let k = 0; k < closePx; k++) {
+      const add = [];
+      const ax0 = Math.max(0, x0 - 1), ay0 = Math.max(0, y0 - 1);
+      const ax1 = Math.min(W - 1, x1 + 1), ay1 = Math.min(H - 1, y1 + 1);
+      for (let y = ay0; y <= ay1; y++) {
+        const row = y * W;
+        for (let x = ax0; x <= ax1; x++) {
+          const p = row + x;
+          if (mask[p] || fringe[p]) continue;
+          if ((x > 0 && mask[p - 1]) || (x < W - 1 && mask[p + 1]) ||
+              (y > 0 && mask[p - W]) || (y < H - 1 && mask[p + W])) add.push(p);
+        }
+      }
+      if (!add.length) break;
+      for (const p of add) {
+        if (mask[p]) continue;
+        mask[p] = 1; count++;
+        const x = p % W, y = (p - x) / W;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
     }
   }
   if (!count) { showToast('這裡沒有可以填的範圍'); return; }
@@ -2626,10 +2660,10 @@ if ($('lt-bucket')) $('lt-bucket').onclick = () => $('bkt').click();
 if ($('bucket-quick')) $('bucket-quick').onclick = () => $('bkt').click();
 
 // 油漆桶設定：記住上一次的值
-['btol', 'bfill', 'bclose'].forEach(id => {
+['btol', 'bfill', 'bwide'].forEach(id => {
   const el = $(id), val = $(id + '-val'); if (!el) return;
   try { const sv = localStorage.getItem('bucket_' + id); if (sv != null) el.value = sv; } catch {}
-  const fmt = v2 => id === 'bfill' ? v2 + '%' : id === 'bclose' ? v2 + 'px' : v2;
+  const fmt = v2 => id === 'bfill' ? v2 + '%' : id === 'bwide' ? v2 + 'px' : v2;
   const sync = () => { if (val) val.textContent = fmt(el.value); };
   el.oninput = () => { sync(); try { localStorage.setItem('bucket_' + id, el.value); } catch {} };
   sync();

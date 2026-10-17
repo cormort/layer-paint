@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt7">
+  <link rel="stylesheet" href="style.css?v=opt8">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -493,7 +493,7 @@
         <span class="panel-title">油漆桶</span>
         <button id="bucket-quick" class="btn-subtle" type="button" title="啟用／關閉油漆桶 (G)">啟用</button>
       </div>
-      <p class="hint" style="margin:0;line-height:1.45">點在封閉區域裡就填滿前景色；邊界依「取樣來源」判斷，填色落在目前圖層（可復原）。</p>
+      <p class="hint" style="margin:0;line-height:1.45">點在封閉區域裡就填滿前景色；邊界依「取樣來源」判斷，填色落在目前圖層（可復原）。按住 <b>Shift</b> 點擊＝整層同色範圍一起填。</p>
       <label>取樣來源
         <select id="bsample" title="邊界要看哪一層：目前圖層最直覺；選所有可見圖層則連底圖的線也會擋住填色">
           <option value="cur">目前圖層</option>
@@ -501,7 +501,7 @@
         </select>
       </label>
       <label>容差 <input id="btol" type="range" min="0" max="100" value="30"><span id="btol-val">30</span></label>
-      <label title="線條有小缺口時把邊界加粗 1~2px 封住；填色會往線內多壓一點，避免漏出去">收邊 <input id="bclose" type="range" min="0" max="4" value="1"><span id="bclose-val">1px</span></label>
+      <label title="你的輪廓線大約多粗。填色會自動封住同寬度的缺口，並往線裡壓到線邊，不會留下白邊">邊界線寬 <input id="bwide" type="range" min="0" max="12" value="3"><span id="bwide-val">3px</span></label>
       <label>填色濃度 <input id="bfill" type="range" min="5" max="100" value="100"><span id="bfill-val">100%</span></label>
       <label class="check" title="勾選：只填相連的區域；取消：整層同色範圍一起填">
         <input id="bcont" type="checkbox" checked> 只填相連區域
@@ -531,6 +531,6 @@
     </section>
   </aside>
 </div>
-<script src="app.js?v=opt7"></script>
+<script src="app.js?v=opt8"></script>
 </body>
 </html>
