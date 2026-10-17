@@ -831,6 +831,7 @@ function ensureBrushMode() {
   cancelEraserAutoRevert();
   endPick();               // 手動換色＝離開滴管
   endMagnet();             // 也離開磁力描邊：換色代表要回到筆刷
+  endBucket();
   if (eraser) setEraser(false);
 }
 
@@ -1578,6 +1579,7 @@ stage.onpointerdown = e => {
   if (tf) { tfPts.set(e.pointerId, [e.clientX, e.clientY]); return; }
   if (picking && !touches.size) { pickColor(pos(e)); return; }
   if (magnet) { mPid = e.pointerId; startMagnet(pos(e), e.clientX, e.clientY); return; }
+  if (bucket) { const p = pos(e); bucketFill(p[0], p[1]); return; }
   if (guide.mode) { // 先檢查是否按在消失點／地平線把手上
     const r = stageRect(), px = e.clientX - r.left, py = e.clientY - r.top, R = e.pointerType === 'touch' ? 30 : 16;
     const h = gHandles().find(p => { const [hx, hy] = toStage(p.x, p.y); return Math.hypot(hx - px, hy - py) < R; });
@@ -1840,6 +1842,7 @@ addEventListener('keydown', e => {
         closeNewDocModal();
         return;
       }
+      if (bucket) { e.preventDefault(); endBucket(); return; }
       if (magnet) { e.preventDefault(); endMagnet(); return; }
       if (picking) { // Esc 先離開滴管，不必再回頭按一次滴管
         e.preventDefault();
@@ -1854,12 +1857,12 @@ addEventListener('keydown', e => {
     } else if (e.key === 'b' || e.key === 'B') {
       e.preventDefault();
       cancelEraserAutoRevert();
-      endPick(); endMagnet();
+      endPick(); endMagnet(); endBucket();
       setEraser(false);
     } else if (e.key === 'e' || e.key === 'E') {
       e.preventDefault();
       cancelEraserAutoRevert();
-      endPick(); endMagnet();
+      endPick(); endMagnet(); endBucket();
       setEraser(!eraser);
     } else if (e.key === 'v' || e.key === 'V') {
       e.preventDefault();
@@ -1870,6 +1873,9 @@ addEventListener('keydown', e => {
     } else if (e.key === 'm' || e.key === 'M') {
       e.preventDefault();
       $('mtog').click();
+    } else if (e.key === 'g' || e.key === 'G') {
+      e.preventDefault();
+      $('bkt').click();
     } else if (e.key === 'h' || e.key === 'H') {
       e.preventDefault();
       fit();
@@ -2020,16 +2026,22 @@ if ($('mmfit')) $('mmfit').onclick = fit;
 
 // 工具列一次只亮一個：變形或滴管進行中時，筆刷/橡皮擦先暗下來
 function toolUi() {
-  const busy = tf || picking || magnet;
+  const busy = tf || picking || magnet || bucket;
   $('brush').classList.toggle('on', !busy && !eraser); $('eraser').classList.toggle('on', !busy && eraser);
   $('tfm').classList.toggle('on', !!tf); $('pick').classList.toggle('on', picking);
   if ($('mtog')) $('mtog').classList.toggle('on', magnet);
+  if ($('bkt')) $('bkt').classList.toggle('on', bucket);
+  if ($('lt-bucket')) $('lt-bucket').classList.toggle('on', bucket);
+  if ($('bucket-quick')) {
+    $('bucket-quick').textContent = bucket ? '關閉' : '啟用';
+    $('bucket-quick').classList.toggle('on', bucket);
+  }
   if ($('magnet-quick')) {
     $('magnet-quick').textContent = magnet ? '關閉' : '啟用';
     $('magnet-quick').classList.toggle('on', magnet);
   }
   if ($('lt-magnet')) $('lt-magnet').classList.toggle('on', magnet);
-  wrap.style.cursor = (picking || magnet) ? 'crosshair' : (eraser && !busy ? 'none' : ''); // 滴管／描邊→十字；橡皮擦→用範圍圈取代游標
+  wrap.style.cursor = (picking || magnet || bucket) ? 'crosshair' : (eraser && !busy ? 'none' : ''); // 滴管／描邊→十字；橡皮擦→用範圍圈取代游標
 
   // 左側垂直工具列 (Left Toolbar) 同步
   if ($('lt-brush')) $('lt-brush').classList.toggle('on', !busy && !eraser);
@@ -2052,8 +2064,8 @@ function toolUi() {
   if ($('btn-esoft-done')) $('btn-esoft-done').style.display = eraser ? 'inline-flex' : 'none';
   updateQuickBar();
 }
-$('brush').onclick = () => { cancelEraserAutoRevert(); endPick(); endMagnet(); setEraser(false); };
-$('eraser').onclick = () => { cancelEraserAutoRevert(); endPick(); endMagnet(); setEraser(!eraser); }; // 再次點擊橡皮擦可切換回筆刷
+$('brush').onclick = () => { cancelEraserAutoRevert(); endPick(); endMagnet(); endBucket(); setEraser(false); };
+$('eraser').onclick = () => { cancelEraserAutoRevert(); endPick(); endMagnet(); endBucket(); setEraser(!eraser); }; // 再次點擊橡皮擦可切換回筆刷
 if ($('btn-to-brush')) $('btn-to-brush').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
 if ($('btn-esoft-done')) $('btn-esoft-done').onclick = () => { cancelEraserAutoRevert(); setEraser(false); };
 if ($('et-keep')) $('et-keep').onclick = () => cancelEraserAutoRevert();
@@ -2172,7 +2184,7 @@ function tfMove(e) {
   }
   tfRender();
 }
-$('tfm').onclick = () => { endPick(); endMagnet(); tf ? endTf() : startTf(); };
+$('tfm').onclick = () => { endPick(); endMagnet(); endBucket(); tf ? endTf() : startTf(); };
 $('tfok').onclick = endTf;
 $('tfs').oninput = e => { tf.m.s = e.target.value / 100; tfRender(); };
 $('tfr').oninput = e => { tf.m.r = e.target.value * Math.PI / 180; tfRender(); };
@@ -2234,7 +2246,7 @@ function endPick() {
 }
 $('pick').onclick = () => {
   if (picking) { endPick(); return; }
-  cancelEraserAutoRevert(); endMagnet();
+  cancelEraserAutoRevert(); endMagnet(); endBucket();
   eraser = false; eCur = null; // 進滴管就離開橡皮擦，取完色也不會彈回去
   picking = true;
   toolUi(); drawECur();
@@ -2458,7 +2470,7 @@ function endMagnet() {
 
 $('mtog').onclick = () => {
   if (magnet) { endMagnet(); return; }
-  cancelEraserAutoRevert(); endPick();
+  cancelEraserAutoRevert(); endPick(); endBucket();
   eraser = false; eCur = null; magnet = true;
   toolUi(); drawECur();
 };
@@ -2479,6 +2491,158 @@ if ($('magnet-quick')) $('magnet-quick').onclick = () => $('mtog').click();
   el.onchange = () => {
     try { localStorage.setItem('magnet_' + id, el.checked ? '1' : '0'); } catch {}
     if (id === 'mloupe' && !el.checked) hideLoupe();
+  };
+});
+
+// --- 油漆桶：點在封閉區域裡就填滿前景色（掃描線 flood fill）---
+// 邊界來源可選「目前圖層」或「所有可見圖層」（後者會連底圖的線一起當牆），填色一律寫在目前圖層。
+let bucket = false;
+const bcv = Object.assign(document.createElement('canvas'), { width: 1, height: 1 });
+
+const hexRGB = hex => {
+  const h = String(hex || '#000000').replace('#', '');
+  const f = h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0');
+  return [parseInt(f.slice(0, 2), 16) || 0, parseInt(f.slice(2, 4), 16) || 0, parseInt(f.slice(4, 6), 16) || 0];
+};
+
+function bucketSource() {
+  if (bcv.width !== W || bcv.height !== H) { bcv.width = W; bcv.height = H; }
+  const g = bcv.getContext('2d', { willReadFrequently: true });
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  const src = $('bsample')?.value === 'all' ? layers.filter(l => l.visible) : [cur];
+  src.forEach(l => {
+    g.globalAlpha = +(l.c.style.opacity || 1);
+    g.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    g.drawImage(l.c, 0, 0);
+  });
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  return g.getImageData(0, 0, W, H).data;
+}
+
+function bucketFill(cx, cy) {
+  if (!cur) return;
+  if (cur.locked) {
+    showToast(cur.base ? '底圖已鎖定：先在圖層列點 🔒 解鎖才能填色' : '「' + cur.name + '」已鎖定：先解鎖才能填色');
+    return;
+  }
+  const sx = Math.floor(cx), sy = Math.floor(cy);
+  if (sx < 0 || sy < 0 || sx >= W || sy >= H) return;
+  const src = bucketSource(), p0 = sy * W + sx, i0 = p0 * 4;
+  const r0 = src[i0], g0 = src[i0 + 1], b0 = src[i0 + 2];
+  const tol = Math.max(0, Math.min(100, +($('btol')?.value ?? 30))) * 2.55;
+  const match = p => {
+    const i = p * 4;
+    return Math.abs(src[i] - r0) <= tol && Math.abs(src[i + 1] - g0) <= tol && Math.abs(src[i + 2] - b0) <= tol;
+  };
+  // 收邊：把「非種子色」的牆加粗 1~N px，順便封掉描線首尾沒接好留下的小缺口
+  const closePx = Math.max(0, Math.min(4, +($('bclose')?.value ?? 1)));
+  let barrier = null;
+  if (closePx > 0) {
+    barrier = new Uint8Array(W * H);
+    for (let p = 0; p < W * H; p++) barrier[p] = match(p) ? 0 : 1;
+    for (let k = 0; k < closePx; k++) {
+      const h = new Uint8Array(W * H), v2 = new Uint8Array(W * H);
+      for (let y = 0; y < H; y++) {
+        const row = y * W;
+        for (let x = 0; x < W; x++) {
+          const p = row + x;
+          h[p] = barrier[p] || (x > 0 && barrier[p - 1]) || (x < W - 1 && barrier[p + 1]) ? 1 : 0;
+        }
+      }
+      for (let y = 0; y < H; y++) {
+        const row = y * W;
+        for (let x = 0; x < W; x++) {
+          const p = row + x;
+          v2[p] = h[p] || (y > 0 && h[p - W]) || (y < H - 1 && h[p + W]) ? 1 : 0;
+        }
+      }
+      barrier = v2;
+    }
+  }
+  const canFill = barrier ? (p => !barrier[p] && match(p)) : match;
+  const mask = new Uint8Array(W * H);
+  let x0 = sx, y0 = sy, x1 = sx, y1 = sy, count = 0;
+  if ($('bcont')?.checked !== false) {
+    const stack = [[sx, sy]];
+    while (stack.length) {
+      const [x, y] = stack.pop(), row = y * W;
+      if (mask[row + x] || !canFill(row + x)) continue;
+      let lx = x; while (lx > 0 && !mask[row + lx - 1] && canFill(row + lx - 1)) lx--;
+      let rx = x; while (rx < W - 1 && !mask[row + rx + 1] && canFill(row + rx + 1)) rx++;
+      for (let i = lx; i <= rx; i++) mask[row + i] = 1;
+      count += rx - lx + 1;
+      if (lx < x0) x0 = lx; if (rx > x1) x1 = rx;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      // 上下兩列各自找新的起點，一次推進一整條水平線（比逐點堆疊快很多）
+      for (const ny of [y - 1, y + 1]) {
+        if (ny < 0 || ny >= H) continue;
+        const nr = ny * W; let run = false;
+        for (let i = lx; i <= rx; i++) {
+          const ok = !mask[nr + i] && canFill(nr + i);
+          if (ok && !run) { stack.push([i, ny]); run = true; } else if (!ok) run = false;
+        }
+      }
+    }
+  } else {
+    for (let p = 0; p < W * H; p++) if (canFill(p)) {
+      mask[p] = 1; count++;
+      const x = p % W, y = (p - x) / W;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  if (!count) { showToast('這裡沒有可以填的範圍'); return; }
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  pushUndo({ l: cur, c: crop(cur.c, x0, y0, bw, bh), x: x0, y: y0 });
+  // 先把遮罩畫成一張小圖再一次疊上去：比逐像素 setImageData 到整層快，也讓濃度可以統一控制
+  const out = new ImageData(bw, bh), [cr, cg, cb] = hexRGB($('color').value), dd = out.data;
+  for (let y = 0; y < bh; y++) {
+    const mrow = (y0 + y) * W + x0, orow = y * bw;
+    for (let x = 0; x < bw; x++) if (mask[mrow + x]) {
+      const o = (orow + x) * 4;
+      dd[o] = cr; dd[o + 1] = cg; dd[o + 2] = cb; dd[o + 3] = 255;
+    }
+  }
+  const fc = Object.assign(document.createElement('canvas'), { width: bw, height: bh });
+  fc.getContext('2d').putImageData(out, 0, 0);
+  cur.ctx.save();
+  cur.ctx.globalAlpha = Math.max(.05, (+($('bfill')?.value ?? 100)) / 100);
+  cur.ctx.drawImage(fc, x0, y0);
+  cur.ctx.restore();
+  dropImg(cur);
+  list(cur); refresh3d?.(cur);
+}
+
+function endBucket() { if (!bucket) return; bucket = false; toolUi(); drawECur(); }
+$('bkt').onclick = () => {
+  if (bucket) { endBucket(); return; }
+  cancelEraserAutoRevert(); endPick(); endMagnet();
+  eraser = false; eCur = null; bucket = true;
+  toolUi(); drawECur();
+};
+if ($('lt-bucket')) $('lt-bucket').onclick = () => $('bkt').click();
+if ($('bucket-quick')) $('bucket-quick').onclick = () => $('bkt').click();
+
+// 油漆桶設定：記住上一次的值
+['btol', 'bfill', 'bclose'].forEach(id => {
+  const el = $(id), val = $(id + '-val'); if (!el) return;
+  try { const sv = localStorage.getItem('bucket_' + id); if (sv != null) el.value = sv; } catch {}
+  const fmt = v2 => id === 'bfill' ? v2 + '%' : id === 'bclose' ? v2 + 'px' : v2;
+  const sync = () => { if (val) val.textContent = fmt(el.value); };
+  el.oninput = () => { sync(); try { localStorage.setItem('bucket_' + id, el.value); } catch {} };
+  sync();
+});
+['bcont', 'bsample'].forEach(id => {
+  const el = $(id); if (!el) return;
+  try {
+    const sv = localStorage.getItem('bucket_' + id);
+    if (sv != null) { if (el.type === 'checkbox') el.checked = sv === '1'; else el.value = sv; }
+  } catch {}
+  el.onchange = () => {
+    const v2 = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value;
+    try { localStorage.setItem('bucket_' + id, v2); } catch {}
   };
 });
 
@@ -2508,7 +2672,7 @@ const JOINTS = [
 let opening = false;
 async function open3d() {
   if (stop3d || opening) return; // 載入 three.js 期間重複點擊不要開第二個
-  endTf(); endMagnet?.();
+  endTf(); endMagnet?.(); endBucket?.();
   opening = true;
   let T, OC;
   try { T = await import('three'); OC = (await import('three/addons/controls/OrbitControls.js')).OrbitControls; }
@@ -2516,7 +2680,7 @@ async function open3d() {
   finally { opening = false; }
   const box = $('m3c'), m3 = $('m3'); m3.style.display = 'flex';
   if ($('minimap')) $('minimap').style.display = 'none'; // 舊版導航器面板；現在是 #mmbox，沒有就跳過
-  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp', 'btog', 'mtog', 'tfm'].forEach(i => $(i).disabled = on);
+  const lock = on => ['add', 'del', 'up', 'down', 'merge', 'd3', 'save', 'imp', 'btog', 'mtog', 'bkt', 'tfm'].forEach(i => $(i).disabled = on);
   lock(true);
   const mkLs = () => layers.filter(l => l.visible && !l.guide).map(l => ({ l, px: null, mesh: null }));
   let ls = mkLs();

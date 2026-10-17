@@ -92,7 +92,7 @@ body {
 #topbar label { white-space: nowrap; }
 #topbar select { flex: none; }
 #topbar .seg { width: 264px; }
-#toolseg { width: 330px; grid-template-columns: repeat(5, 1fr); } /* 筆刷／橡皮擦／變形／滴管／描邊 */
+#toolseg { width: 392px; grid-template-columns: repeat(6, 1fr); } /* 筆刷／橡皮擦／變形／滴管／描邊／填色 */
 #uitog { min-width: 84px; }
 #vori { min-width: 64px; }
 #viewseg { display: grid; grid-template-columns: repeat(2, 1fr); width: 116px; gap: 2px; }
