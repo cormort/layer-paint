@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt22">
+  <link rel="stylesheet" href="style.css?v=opt23">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -32,13 +32,12 @@
 <div id="loupe" class="loupe"><canvas id="loupe-cv"></canvas></div>
 <div id="tool-toast" class="tool-toast" role="status" aria-live="polite"><span id="tt-swatch" class="tt-swatch"></span><span id="tt-text"></span></div>
 <header id="topbar">
-  <!-- 上方工具列＝「復原／重做 → 筆刷 → 常用功能」。左側工具箱已經有的（各工具、大小／不透明度、縮放）
-       一律不在這裡重複。 -->
-  <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button>
-  <span class="sep"></span>
-  <!-- 筆刷：種類＋鉛筆硬度（右側面板的鏡像，換哪邊都會同步） -->
+  <!-- 上方工具列＝「筆刷 → 復原／重做 → 常用功能」。左側工具箱已經有的（各工具、大小／不透明度、縮放）
+       一律不在這裡重複；筆刷擺最左邊，因為那是最常動的兩個控制。 -->
   <select id="tbrush" class="tb-brush" aria-label="筆刷種類" title="筆刷種類"></select>
   <select id="thard" class="tb-hard" aria-label="鉛筆硬度" title="鉛筆硬度（選鉛筆時才出現）"></select>
+  <span class="sep"></span>
+  <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button>
   <!-- 工具都在左側工具箱（V/B/E/I/M/G）；#toolseg 只留給程式呼叫 -->
   <div class="seg" id="toolseg">
     <button id="brush" class="on">筆刷</button><button id="eraser" title="橡皮擦工具 (E)；點擊秒數標籤可調整倒數時間">橡皮擦<span id="eraser-delay-badge" class="eraser-delay-badge" title="點擊調整切換秒數 (1s/2s/3s/5s/關閉)">2s</span></button><button id="tfm">變形</button><button id="pick">滴管</button><button id="mtog" title="磁力描邊：沿著輪廓拖曳，線會吸附到邊緣 (M)">描邊</button><button id="bkt" title="油漆桶：點一下填滿封閉區域 (G)">填色</button>
@@ -576,6 +575,6 @@
     </div>
   </div>
 </div>
-<script src="app.js?v=opt22"></script>
+<script src="app.js?v=opt23"></script>
 </body>
 </html>
