@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt24">
+  <link rel="stylesheet" href="style.css?v=opt25">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -90,6 +90,13 @@
   </div>
   <label class="tm-check" title="勾選：專案會附上匯入時的原始圖檔，之後可以無損地重複變形底圖，檔案較大">
     <input id="praw" type="checkbox" checked> 存專案時附上原始圖檔</label>
+  <div class="tm-ver" id="app-ver" title="目前載入的版本；跟工具列最左邊的「⋯」一起看，就知道有沒有吃到舊快取"></div>
+</div>
+
+<!-- 有新版本（GitHub Pages 的 HTML 會快取 10 分鐘）：讓使用者自己按一下重新載入 -->
+<div id="verchip" class="verchip" role="status">
+  <span id="verchip-text">有新版本</span>
+  <button id="verreload" type="button">重新載入</button>
 </div>
 
 <div id="eraser-toast" class="eraser-toast" style="display:none">
@@ -576,6 +583,6 @@
     </div>
   </div>
 </div>
-<script src="app.js?v=opt24"></script>
+<script src="app.js?v=opt25"></script>
 </body>
 </html>

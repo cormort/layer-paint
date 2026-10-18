@@ -328,6 +328,39 @@ if (topmore && mobMore) {
   addEventListener('keydown', e => { if (e.key === 'Escape') closeTopMore(); }, true);
 }
 
+// --- 版本標記／新版本提示：GitHub Pages 的 index.html 會被快取 10 分鐘，
+// 讓使用者一眼看出現在是哪一版，真的落後時按一下就重新載入 ---
+const APP_VER = (() => {
+  const el = document.querySelector('script[src*="app.js"]');
+  const m = el && el.src.match(/[?&]v=([^&]+)/);
+  return m ? m[1] : '';
+})();
+if ($('app-ver')) $('app-ver').textContent = APP_VER ? '版本 ' + APP_VER : '';
+
+let verCheckedAt = -Infinity;
+async function checkNewVersion() {
+  if (!APP_VER) return;
+  const now = performance.now();
+  if (now - verCheckedAt < 60000) return; // 一分鐘內不重複問
+  verCheckedAt = now;
+  try {
+    const r = await fetch('index.html?check=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const html = await r.text();
+    const m = html.match(/app\.js\?v=([^"'&>\s]+)/);
+    if (!m || m[1] === APP_VER) return; // 已經是最新
+    if ($('verchip-text')) $('verchip-text').textContent = `有新版本（${m[1]}）`;
+    $('verchip')?.classList.add('on');
+  } catch {}
+}
+addEventListener('load', () => setTimeout(checkNewVersion, 1200));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNewVersion(); });
+if ($('verreload')) $('verreload').onclick = () => {
+  const u = new URL(location.href);
+  u.searchParams.set('u', Date.now().toString(36)); // 換一個 URL，繞過 HTML 快取
+  location.href = u.toString();
+};
+
 const btnMob = $('btn-mobile-dock');
 if (btnMob) {
   btnMob.addEventListener('pointerdown', e => e.stopPropagation());
