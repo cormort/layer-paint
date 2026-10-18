@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt8">
+  <link rel="stylesheet" href="style.css?v=opt9">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -531,6 +531,24 @@
     </section>
   </aside>
 </div>
-<script src="app.js?v=opt8"></script>
+<!-- 匯入底圖時背景還空著：問要不要直接合併到背景，免得圖層多一層 -->
+<div id="ask-bg" class="ask-bg" style="display:none" role="dialog" aria-modal="true" aria-labelledby="ask-bg-title" aria-describedby="ask-bg-desc">
+  <div class="ask-bg-backdrop" id="ask-bg-backdrop"></div>
+  <div class="ask-bg-card">
+    <button id="ask-bg-close" class="ask-bg-x" type="button" aria-label="關閉（另開底圖圖層）">✕</button>
+    <canvas id="ask-bg-prev" class="ask-bg-prev" width="96" height="72" aria-hidden="true"></canvas>
+    <h2 id="ask-bg-title" class="ask-bg-title">背景目前是空的</h2>
+    <p id="ask-bg-desc" class="ask-bg-desc">這張圖要直接合併到背景，還是另外開一個「底圖」圖層？</p>
+    <ul class="ask-bg-notes">
+      <li><b>合併到背景</b>：不會多一層圖層；圖片以半透明疊在白紙上並鎖定。</li>
+      <li><b>另開底圖圖層</b>：白紙留在最底層，圖片放在它上面（原本的做法）。</li>
+    </ul>
+    <div class="ask-bg-actions">
+      <button id="ask-bg-merge" class="ask-bg-primary" type="button">合併到背景</button>
+      <button id="ask-bg-new" class="ask-bg-secondary" type="button">另開底圖圖層</button>
+    </div>
+  </div>
+</div>
+<script src="app.js?v=opt9"></script>
 </body>
 </html>

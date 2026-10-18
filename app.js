@@ -334,7 +334,11 @@ function sync(...dirty) {
 // 傳入的圖層才會重畫縮圖，其餘沿用快取（呼叫端負責在像素變動時把自己傳進來）。
 const thumbs = new Map();
 // 匯入底圖的 ImageBitmap 佔用的是 GPU/CPU 記憶體，換掉時要明確釋放
-const dropImg = L => { if (L && L.img) { L.img.close(); L.img = null; } if (L) L.raw = null; };
+const dropImg = L => {
+  if (L && L.img) { L.img.close(); L.img = null; }
+  if (L) L.raw = null;
+  if (L) L.bgpaint = null; // 圖片沒了就不該再照「白紙＋半透明」畫：之後變形要走畫布快照
+};
 const forget = L => { thumbs.delete(L); dropImg(L); };
 // 底圖＝匯入的參考圖層（有 base 旗標或還留著原始圖檔的圖層）；一疊底圖取最上面那張
 const baseLayer = () => { for (let i = layers.length - 1; i >= 0; i--) if (layers[i].base) return layers[i]; return null; };
@@ -2139,8 +2143,11 @@ $('merge').onclick = () => {
 // --- 變形：移動/縮放/旋轉/翻轉目前圖層。底圖保留原始圖檔，重複變形不會越來越糊 ---
 const tfPts = new Map();
 const fitTf = img => ({ x: 0, y: 0, s: Math.min(W / img.width, H / img.height), r: 0, fx: 1 });
-function paintTf(ctx, src, m) {
+// opt.paper：先鋪一層白紙再畫圖（合併到背景的圖層用）；opt.alpha：圖片本身畫上去時的不透明度
+function paintTf(ctx, src, m, opt) {
   ctx.clearRect(0, 0, W, H); ctx.save();
+  if (opt && opt.paper) { ctx.globalAlpha = 1; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); }
+  ctx.globalAlpha = opt && opt.alpha != null ? opt.alpha : 1;
   ctx.translate(W / 2 + m.x, H / 2 + m.y); ctx.rotate(m.r); ctx.scale(m.s * m.fx, m.s);
   ctx.drawImage(src, -src.width / 2, -src.height / 2); ctx.restore();
 }
@@ -2149,7 +2156,7 @@ const tfUi = () => {
   if (!tf) return;
   $('tfs').value = tf.m.s * 100; $('tfr').value = Math.round(((tf.m.r * 180 / Math.PI) % 360 + 540) % 360 - 180);
 };
-const tfRender = () => { paintTf(tf.L.ctx, tf.src, tf.m); drawGuide(); tfUi(); };
+const tfRender = () => { paintTf(tf.L.ctx, tf.src, tf.m, tf.L.bgpaint); drawGuide(); tfUi(); };
 function startTf() {
   if (tf) return;
   if (cur.locked) { // 鎖定的圖層（含預設鎖定的底圖）先說清楚為什麼不能變形
@@ -2157,7 +2164,8 @@ function startTf() {
     return;
   }
   const L = cur, before = crop(L.c, 0, 0, W, H);
-  tf = { L, before, src: L.img || before, m: { x: 0, y: 0, s: 1, r: 0, fx: 1, ...L.tf } };
+  // 沒有原始圖檔時（例如合併／清空過）畫布本身就是內容，變形要從原尺寸開始，不能套用圖片當時的縮放
+  tf = { L, before, src: L.img || before, m: L.img ? { x: 0, y: 0, s: 1, r: 0, fx: 1, ...L.tf } : { x: 0, y: 0, s: 1, r: 0, fx: 1 } };
   tf.m0 = L.img ? fitTf(L.img) : { ...tf.m };
   tfPts.clear(); tfRender();
 }
@@ -2962,10 +2970,64 @@ $('m3x').onclick = () => stop3d?.();
 
 // 匯入圖片當底圖：放在最底層之上、等比縮放置中、預設半透明；不改變目前選取的圖層
 $('imp').onclick = () => $('impf').click();
+
+// 背景是不是空的（只剩白紙或全透明）：匯入時拿這個判斷要不要問「合併到背景」
+function bgIsBlank() {
+  const bg = layers.find(l => l.bg);
+  if (!bg || bg.base) return false; // 已經是圖片底圖就不再問
+  let d;
+  try { d = bg.ctx.getImageData(0, 0, W, H).data; } catch { return false; }
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 8) continue;                                    // 透明＝空的
+    if (d[i] < 250 || d[i + 1] < 250 || d[i + 2] < 250) return false; // 有任何非白都有東西
+  }
+  return true;
+}
+
+// 兩選一的小對話框（原生 confirm 的按鈕字改不了，這裡自己畫；Esc／✕＝另開圖層）
+let askBgResolve = null;
+function closeAskBg(merge) {
+  const el = $('ask-bg'); if (el) el.style.display = 'none';
+  const r = askBgResolve; askBgResolve = null; if (r) r(merge);
+}
+function askMergeToBg(img) {
+  const el = $('ask-bg');
+  if (!el) return Promise.resolve(false);
+  const pv = $('ask-bg-prev');
+  if (pv) { // 縮圖：先鋪白，透明 PNG 才看得出內容
+    pv.width = 96; pv.height = 72;
+    const x = pv.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, 96, 72);
+    const s = Math.min(96 / img.width, 72 / img.height);
+    x.drawImage(img, (96 - img.width * s) / 2, (72 - img.height * s) / 2, img.width * s, img.height * s);
+  }
+  el.style.display = 'flex';
+  $('ask-bg-merge').focus();
+  return new Promise(r => { askBgResolve = r; });
+}
+$('ask-bg-merge').onclick = () => closeAskBg(true);
+$('ask-bg-new').onclick = () => closeAskBg(false);
+$('ask-bg-close').onclick = $('ask-bg-backdrop').onclick = () => closeAskBg(false);
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && askBgResolve) { e.preventDefault(); e.stopPropagation(); closeAskBg(false); }
+}, true);
+
 $('impf').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   const img = await createImageBitmap(f).catch(() => null);
   if (!img) return alert('無法讀取這個圖片');
+  // 背景還空著就問一次：合併到背景（不新增圖層）還是照原本的做法另開「底圖」圖層
+  if (bgIsBlank() && await askMergeToBg(img)) {
+    const bg = layers.find(l => l.bg);
+    bg.img = img; bg.raw = f; bg.tf = fitTf(img);
+    // 白紙留在同一層：疊完看起來跟「白底＋半透明底圖」完全一樣，匯出也還是不透明白底
+    bg.bgpaint = { paper: true, alpha: .5 };
+    paintTf(bg.ctx, img, bg.tf, bg.bgpaint);
+    bg.name = '底圖'; bg.base = true; bg.locked = true; bg.c.style.opacity = 1;
+    list(bg);
+    showToast('已把圖片合併到背景並鎖定；要調整它，先在圖層列點 🔒 解鎖');
+    return;
+  }
   const prev = cur; cur = layers[0]; addLayer();
   const base = cur;
   base.img = img; base.raw = f; base.tf = fitTf(img); paintTf(base.ctx, img, base.tf);
@@ -3021,6 +3083,7 @@ async function saveProject() {
     w: W, h: H, cur: layers.indexOf(cur), guide: { ...guide },
     layers: layers.map(l => ({
       name: l.name, visible: !!l.visible, locked: !!l.locked, opacity: +(l.c.style.opacity || 1), guide: !!l.guide, bg: !!l.bg, base: !!l.base,
+      bgpaint: l.bgpaint || null, // 合併到背景的圖層：再變形時要維持「白紙＋半透明圖片」的畫法
       raw: withRaw && l.raw ? (l.raw.type || 'image/png') : null,
       tf: l.tf ? { ...l.tf } : null, // 底圖目前的變形，還原後才能接著微調
     })),
@@ -3070,6 +3133,7 @@ async function openProject(file) {
     // 有帶著原始檔就還原成可無損再變形的底圖（.tf 沿用預設，之後再變形會重新算）
     const L = { c, ctx, name: m.name || ('圖層 ' + (i + 1)), visible: m.visible !== false, locked: !!m.locked, guide: !!m.guide, raw: raws[i], tf: m.tf || undefined,
       bg: !!m.bg || (i === 0 && m.name === '背景'), // 舊專案沒有 bg 旗標，用名稱推斷
+      bgpaint: m.bgpaint || undefined,
       base: m.base != null ? !!m.base : !!raws[i] }; // 舊專案沒有 base 旗標：帶原圖的圖層就當底圖
     if (raws[i]) L.img = await createImageBitmap(raws[i]).catch(() => null);
     made.push(L);

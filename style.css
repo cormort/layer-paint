@@ -1972,3 +1972,103 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
 }
 
 
+/* --- 匯入底圖：背景還空著時詢問「合併到背景？」的小對話框 --- */
+.ask-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ask-bg-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 7, 10, 0.68);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.ask-bg-card {
+  position: relative;
+  z-index: 1;
+  width: min(430px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 18px 18px 16px;
+  background: #15161a;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  animation: nd-pop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ask-bg-x {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ask-bg-x:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+.ask-bg-prev {
+  display: block;
+  width: 96px;
+  height: 72px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.ask-bg-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.ask-bg-desc {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.ask-bg-notes {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.ask-bg-notes b { color: #c9c6c0; font-weight: 600; }
+.ask-bg-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.ask-bg-actions button {
+  flex: 1;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ask-bg-primary {
+  background: var(--blue);
+  border: 1px solid var(--blue);
+  color: var(--blue-ink);
+}
+.ask-bg-primary:hover { filter: brightness(1.06); }
+.ask-bg-secondary {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.ask-bg-secondary:hover { background: rgba(255, 255, 255, 0.06); }
