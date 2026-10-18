@@ -132,11 +132,12 @@ body {
   #topbar #d3,
   #topbar .spacer,
   #topbar > .sep { display: none; }
+  #topbar > .sep-brush { display: block; } /* 筆刷組和復原／重做之間留一條線 */
+  #topbar #uitog { margin-left: auto; }     /* 面板開合固定在右邊 */
   #topbar #mobbar-more {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-left: auto;
   }
 }
 .topmore {
@@ -2062,6 +2063,7 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
   #topbar #uitog,
   #topbar .spacer,
   #topbar > .sep { display: none; }
+  #topbar > .sep-brush { display: block; }
   #topbar .icon { flex: 0 0 34px !important; }
   #topbar #tbrush { width: 96px; min-height: 30px; font-size: 12px; padding: 0 22px 0 7px; }
   #topbar #thard { width: 58px; min-height: 30px; font-size: 12px; padding: 0 20px 0 6px; }
@@ -2069,7 +2071,6 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-left: auto;
   }
 }
 
