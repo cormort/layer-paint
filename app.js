@@ -287,6 +287,54 @@ $('uitog').onclick = () => {
   }
 };
 
+// --- 手機的「⋯ 更多」：把檔案／版面／視角這些次要操作收進來，工具列才不會溢位 ---
+// 選單本身不持有狀態，全部轉呼叫原本的按鈕，行為跟桌面完全一致。
+const topmore = $('topmore'), mobMore = $('mobbar-more');
+const closeTopMore = () => {
+  if (topmore) topmore.style.display = 'none';
+  mobMore?.setAttribute('aria-expanded', 'false');
+};
+const openTopMore = () => {
+  if (!topmore || !mobMore) return;
+  topmore.style.display = 'block';
+  const r = mobMore.getBoundingClientRect();
+  const w = topmore.offsetWidth, h = topmore.offsetHeight;
+  topmore.style.top = Math.round(Math.min(r.bottom + 6, innerHeight - h - 8)) + 'px';
+  topmore.style.left = Math.round(Math.max(8, Math.min(r.right - w, innerWidth - w - 8))) + 'px';
+  mobMore.setAttribute('aria-expanded', 'true');
+};
+if (mobMore) {
+  mobMore.onclick = e => {
+    e.stopPropagation();
+    if (topmore && topmore.style.display === 'block') closeTopMore(); else openTopMore();
+  };
+}
+if (topmore && mobMore) {
+  const jump = {
+    'tm-newdoc': 'btn-new-doc', 'tm-popen': 'popen', 'tm-psave': 'psave', 'tm-save': 'save',
+    'tm-imp': 'imp', 'tm-btog': 'btog', 'tm-vori': 'vori', 'tm-d3': 'd3',
+    'tm-vfit': 'vfit', 'tm-v100': 'tab-v100', 'tm-zout': 'zout', 'tm-zin': 'zin',
+  };
+  topmore.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const target = jump[b.id];
+    closeTopMore();
+    if (target) $(target)?.click();
+  });
+  // 「存專案時附上原始圖檔」跟原本的 #praw 是同一件事，兩邊互相同步
+  const praw = $('tm-praw');
+  if (praw && $('praw')) {
+    praw.checked = $('praw').checked;
+    praw.onchange = () => { $('praw').checked = praw.checked; };
+    $('praw').addEventListener('change', () => { praw.checked = $('praw').checked; });
+  }
+  addEventListener('pointerdown', e => {
+    if (!topmore || topmore.style.display !== 'block') return;
+    if (!topmore.contains(e.target) && !mobMore.contains(e.target)) closeTopMore();
+  }, true);
+  addEventListener('keydown', e => { if (e.key === 'Escape') closeTopMore(); }, true);
+}
+
 const btnMob = $('btn-mobile-dock');
 if (btnMob) {
   btnMob.addEventListener('pointerdown', e => e.stopPropagation());
@@ -773,11 +821,12 @@ function updateEraserDelayUi() {
   $('eraser-delay-seg')?.querySelectorAll('button').forEach(b => {
     b.classList.toggle('on', +b.dataset.delay === eraserAutoRevertDelay);
   });
+  const label = eraserAutoRevertDelay === 0 ? '關閉' : `${eraserAutoRevertDelay / 1000}s`;
+  const tip = eraserAutoRevertDelay === 0 ? '自動切換已關閉（點擊啟用）' : `擦完 ${eraserAutoRevertDelay / 1000} 秒後切換回筆刷（點擊調整）`;
   const badge = $('eraser-delay-badge');
-  if (badge) {
-    badge.textContent = eraserAutoRevertDelay === 0 ? '關閉' : `${eraserAutoRevertDelay / 1000}s`;
-    badge.title = eraserAutoRevertDelay === 0 ? '自動切換已關閉（點擊啟用）' : `擦完 ${eraserAutoRevertDelay / 1000} 秒後切換回筆刷（點擊調整）`;
-  }
+  if (badge) { badge.textContent = label; badge.title = tip; }
+  const chip = $('eraser-quick');
+  if (chip) { chip.textContent = label; chip.title = tip; }
 }
 
 function cancelEraserAutoRevert() {
@@ -2047,6 +2096,10 @@ function toolUi() {
   if ($('lt-magnet')) $('lt-magnet').classList.toggle('on', magnet);
   wrap.style.cursor = (picking || magnet || bucket) ? 'crosshair' : (eraser && !busy ? 'none' : ''); // 滴管／描邊→十字；橡皮擦→用範圍圈取代游標
 
+  // 上方工具列的下拉選單／橡皮擦秒數徽章跟著目前工具走（快捷鍵、左側工具列、自動切回都會經過這裡）
+  if ($('toolsel')) $('toolsel').value = tf ? 'tfm' : picking ? 'pick' : magnet ? 'mtog' : bucket ? 'bkt' : eraser ? 'eraser' : 'brush';
+  if ($('topbar')) $('topbar').classList.toggle('eraser-on', eraser);
+
   // 左側垂直工具列 (Left Toolbar) 同步
   if ($('lt-brush')) $('lt-brush').classList.toggle('on', !busy && !eraser);
   if ($('lt-eraser')) $('lt-eraser').classList.toggle('on', !busy && eraser);
@@ -2085,6 +2138,15 @@ if (edBadge) {
     cycleEraserDelay();
   };
 }
+// 上方工具列：下拉＝呼叫原本的按鈕，互斥／鎖定提示／自動切回等既有邏輯都不用改
+if ($('toolsel')) {
+  $('toolsel').onchange = e => {
+    const b = $(e.target.value);
+    if (b) b.click();
+  };
+}
+// 橡皮擦秒數徽章：工具列上的那顆（原本的徽章在收起來的 #toolseg 裡）一樣點一下就輪播
+if ($('eraser-quick')) $('eraser-quick').onclick = () => cycleEraserDelay();
 if ($('et-plus')) {
   $('et-plus').onclick = e => {
     e.stopPropagation();

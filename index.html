@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt9">
+  <link rel="stylesheet" href="style.css?v=opt17">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -32,6 +32,22 @@
 <div id="loupe" class="loupe"><canvas id="loupe-cv"></canvas></div>
 <div id="tool-toast" class="tool-toast" role="status" aria-live="polite"><span id="tt-swatch" class="tt-swatch"></span><span id="tt-text"></span></div>
 <header id="topbar">
+  <!-- 復原／重做固定在最左邊，任何寬度都先看得到 -->
+  <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button>
+  <span class="sep"></span>
+  <!-- 工具改成下拉：窄螢幕省空間，工具狀態仍由原本的按鈕維護（#toolseg 只留給程式呼叫） -->
+  <select id="toolsel" aria-label="目前工具" title="切換工具（B 筆刷／E 橡皮擦／V 變形／I 滴管／M 描邊／G 填色）">
+    <option value="brush">筆刷 (B)</option>
+    <option value="eraser">橡皮擦 (E)</option>
+    <option value="tfm">變形 (V)</option>
+    <option value="pick">滴管 (I)</option>
+    <option value="mtog">磁力描邊 (M)</option>
+    <option value="bkt">油漆桶 (G)</option>
+  </select>
+  <button id="eraser-quick" class="eraser-quick" type="button" title="擦完自動切回筆刷的秒數（點擊調整）">2s</button>
+  <div class="seg" id="toolseg">
+    <button id="brush" class="on">筆刷</button><button id="eraser" title="橡皮擦工具 (E)；點擊秒數標籤可調整倒數時間">橡皮擦<span id="eraser-delay-badge" class="eraser-delay-badge" title="點擊調整切換秒數 (1s/2s/3s/5s/關閉)">2s</span></button><button id="tfm">變形</button><button id="pick">滴管</button><button id="mtog" title="磁力描邊：沿著輪廓拖曳，線會吸附到邊緣 (M)">描邊</button><button id="bkt" title="油漆桶：點一下填滿封閉區域 (G)">填色</button>
+  </div>
   <button id="btn-new-doc" class="btn-new-doc" title="新增畫布／紙張尺寸選擇 (⌘N)">📄 新畫布</button>
   <button id="popen" title="開啟先前存的 .lpaint 專案">開專案</button>
   <button id="psave" title="存成可再編輯的專案檔（保留圖層）">存專案</button>
@@ -47,10 +63,6 @@
   <select id="vsize" aria-label="版面尺寸" style="display:none"></select>
   <button id="vori" title="切換直式／橫式">直式</button>
   <span class="spacer"></span>
-  <div class="seg" id="toolseg">
-    <button id="brush" class="on">筆刷</button><button id="eraser" title="橡皮擦工具 (E)；點擊秒數標籤可調整倒數時間">橡皮擦<span id="eraser-delay-badge" class="eraser-delay-badge" title="點擊調整切換秒數 (1s/2s/3s/5s/關閉)">2s</span></button><button id="tfm">變形</button><button id="pick">滴管</button><button id="mtog" title="磁力描邊：沿著輪廓拖曳，線會吸附到邊緣 (M)">描邊</button><button id="bkt" title="油漆桶：點一下填滿封閉區域 (G)">填色</button>
-  </div>
-  <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button>
   <span class="sep"></span>
   <div class="seg" id="viewseg">
     <button id="vfit" class="on" title="整體視角（適合畫面）">整體</button><button id="vdetail" title="局部視角（100% 原寸）">局部</button>
@@ -60,11 +72,31 @@
     <select id="zsel" title="顯示比例" aria-label="顯示比例"></select>
     <button id="zin" class="icon" title="放大 (Ctrl +)">+</button>
   </div>
-  <span class="sep"></span>
+  <span class="sep sep-3d"></span>
   <button id="d3">3D 檢視</button>
   <span class="spacer"></span>
   <button id="uitog" aria-label="收合面板"></button>
+  <!-- 手機：把檔案／版面／視角這些次要操作收進「⋯」 -->
+  <button id="mobbar-more" class="mobbar-more" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="topmore" title="更多功能">⋯</button>
 </header>
+<div id="topmore" class="topmore" role="menu" aria-label="更多功能" style="display:none">
+  <div class="tm-grid">
+    <button id="tm-newdoc" type="button">📄 新畫布</button>
+    <button id="tm-popen" type="button">📁 開專案</button>
+    <button id="tm-psave" type="button">💾 存專案</button>
+    <button id="tm-save" type="button">🖼️ 匯出 PNG</button>
+    <button id="tm-imp" type="button">🖼️ 匯入底圖</button>
+    <button id="tm-btog" type="button">👁️ 底圖顯示</button>
+    <button id="tm-vori" type="button">▯ 直式／橫式</button>
+    <button id="tm-d3" type="button">🧊 3D 檢視</button>
+    <button id="tm-vfit" type="button">整體視角</button>
+    <button id="tm-v100" type="button">100% 原寸</button>
+    <button id="tm-zout" type="button">🔍 縮小</button>
+    <button id="tm-zin" type="button">🔍 放大</button>
+  </div>
+  <label class="tm-check"><input id="tm-praw" type="checkbox" checked> 存專案時附上原始圖檔</label>
+</div>
+
 <div id="eraser-toast" class="eraser-toast" style="display:none">
   <div class="et-inner">
     <span class="et-icon">⌫</span>
@@ -549,6 +581,6 @@
     </div>
   </div>
 </div>
-<script src="app.js?v=opt9"></script>
+<script src="app.js?v=opt17"></script>
 </body>
 </html>
