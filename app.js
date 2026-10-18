@@ -825,8 +825,6 @@ function updateEraserDelayUi() {
   const tip = eraserAutoRevertDelay === 0 ? '自動切換已關閉（點擊啟用）' : `擦完 ${eraserAutoRevertDelay / 1000} 秒後切換回筆刷（點擊調整）`;
   const badge = $('eraser-delay-badge');
   if (badge) { badge.textContent = label; badge.title = tip; }
-  const chip = $('eraser-quick');
-  if (chip) { chip.textContent = label; chip.title = tip; }
 }
 
 function cancelEraserAutoRevert() {
@@ -2096,10 +2094,6 @@ function toolUi() {
   if ($('lt-magnet')) $('lt-magnet').classList.toggle('on', magnet);
   wrap.style.cursor = (picking || magnet || bucket) ? 'crosshair' : (eraser && !busy ? 'none' : ''); // 滴管／描邊→十字；橡皮擦→用範圍圈取代游標
 
-  // 上方工具列的下拉選單／橡皮擦秒數徽章跟著目前工具走（快捷鍵、左側工具列、自動切回都會經過這裡）
-  if ($('toolsel')) $('toolsel').value = tf ? 'tfm' : picking ? 'pick' : magnet ? 'mtog' : bucket ? 'bkt' : eraser ? 'eraser' : 'brush';
-  if ($('topbar')) $('topbar').classList.toggle('eraser-on', eraser);
-
   // 左側垂直工具列 (Left Toolbar) 同步
   if ($('lt-brush')) $('lt-brush').classList.toggle('on', !busy && !eraser);
   if ($('lt-eraser')) $('lt-eraser').classList.toggle('on', !busy && eraser);
@@ -2138,15 +2132,6 @@ if (edBadge) {
     cycleEraserDelay();
   };
 }
-// 上方工具列：下拉＝呼叫原本的按鈕，互斥／鎖定提示／自動切回等既有邏輯都不用改
-if ($('toolsel')) {
-  $('toolsel').onchange = e => {
-    const b = $(e.target.value);
-    if (b) b.click();
-  };
-}
-// 橡皮擦秒數徽章：工具列上的那顆（原本的徽章在收起來的 #toolseg 裡）一樣點一下就輪播
-if ($('eraser-quick')) $('eraser-quick').onclick = () => cycleEraserDelay();
 if ($('et-plus')) {
   $('et-plus').onclick = e => {
     e.stopPropagation();

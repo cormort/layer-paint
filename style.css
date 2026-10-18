@@ -91,26 +91,11 @@ body {
 #topbar .spacer { flex: 1 1 0; min-width: 8px; }
 #topbar label { white-space: nowrap; }
 #topbar select { flex: none; }
-#toolseg { display: none; } /* 工具已改成下拉（#toolsel），按鈕只留給程式呼叫 */
-#topbar #toolsel { width: 132px; min-height: 34px; padding: 0 26px 0 9px; font-size: 13px; }
+#toolseg { display: none; } /* 工具都在左側工具箱，這裡的按鈕只剩程式呼叫用 */
 #topbar #viewseg { width: 116px; }
 #topbar #uitog { min-width: 84px; }
 #topbar #vori { min-width: 64px; }
 #viewseg { display: grid; grid-template-columns: repeat(2, 1fr); width: 116px; gap: 2px; }
-/* 橡皮擦秒數小徽章：橡皮擦模式才出現（原本的徽章在收起來的 #toolseg 裡） */
-#eraser-quick {
-  display: none;
-  min-height: 24px;
-  padding: 0 7px;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 7px;
-  background: rgba(239, 68, 68, 0.22);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-}
-#eraser-quick:hover { background: rgba(239, 68, 68, 0.4); color: #fff; }
-#topbar.eraser-on #eraser-quick { display: inline-flex; align-items: center; }
 /* 手機的「⋯ 更多」：桌面不顯示，次要操作都收在裡面 */
 #mobbar-more {
   display: none;
@@ -119,16 +104,16 @@ body {
   font-size: 18px;
   line-height: 1;
 }
-/* 上方工具列依視窗寬度自動收成三段（用完即棄的 class 不再需要，純 CSS 就夠穩）：
-   1) 寬 ≤1560：先收掉「整體／局部」與縮放（文件標籤列與右側導航器都有同一組功能）
-   2) 寬 ≤1260：檔案／版面／視角收進「⋯」，只留復原／重做＋工具＋面板開合
-   3) 寬 ≥1561：完整工具列 */
-@media (max-width: 1560px) {
+/* 上方工具列依視窗寬度自動收成三段（工具都在左側工具箱，上方只放檔案／版面／視角）：
+   1) 寬 ≤1409：先收掉「整體／局部」與縮放（文件標籤列與右側導航器都有同一組功能）
+   2) 寬 ≤1119：檔案／版面／視角收進「⋯」，只留復原／重做＋面板開合
+   3) 寬 ≥1410：完整工具列 */
+@media (max-width: 1409px) {
   #topbar #viewseg,
   #topbar .zoombox,
   #topbar .sep-3d { display: none; } /* 中間那兩組收掉後，兩個分隔線會黏在一起 */
 }
-@media (max-width: 1260px) {
+@media (max-width: 1119px) {
   #topbar #btn-new-doc,
   #topbar #popen,
   #topbar #psave,
@@ -2045,8 +2030,8 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
     transform-origin: left center;
   }
 
-  /* 頂部工具列手機端：只留「復原／重做＋工具下拉＋⋯」，其餘收進「⋯」選單，不再溢位
-     （真的遇到超寬字級還是留 horizontal scroll 當退路，總比裁掉好） */
+  /* 頂部工具列手機端：只留「復原／重做＋⋯」，其餘收進「⋯」選單，不再溢位
+     （工具本身在左側工具箱；真的遇到超寬字級還是留 horizontal scroll 當退路，總比裁掉好） */
   #topbar {
     height: 42px;
     padding: 0 6px;
@@ -2075,7 +2060,6 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
   #topbar .spacer,
   #topbar > .sep { display: none; }
   #topbar .icon { flex: 0 0 34px !important; }
-  #topbar #toolsel { width: 118px; min-height: 30px; font-size: 12px; }
   #mobbar-more {
     display: inline-flex;
     align-items: center;

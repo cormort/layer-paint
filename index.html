@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt17">
+  <link rel="stylesheet" href="style.css?v=opt20">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -35,16 +35,7 @@
   <!-- 復原／重做固定在最左邊，任何寬度都先看得到 -->
   <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button>
   <span class="sep"></span>
-  <!-- 工具改成下拉：窄螢幕省空間，工具狀態仍由原本的按鈕維護（#toolseg 只留給程式呼叫） -->
-  <select id="toolsel" aria-label="目前工具" title="切換工具（B 筆刷／E 橡皮擦／V 變形／I 滴管／M 描邊／G 填色）">
-    <option value="brush">筆刷 (B)</option>
-    <option value="eraser">橡皮擦 (E)</option>
-    <option value="tfm">變形 (V)</option>
-    <option value="pick">滴管 (I)</option>
-    <option value="mtog">磁力描邊 (M)</option>
-    <option value="bkt">油漆桶 (G)</option>
-  </select>
-  <button id="eraser-quick" class="eraser-quick" type="button" title="擦完自動切回筆刷的秒數（點擊調整）">2s</button>
+  <!-- 工具都在左側工具箱（V/B/E/I/M/G），上方不再放工具列；#toolseg 只留給程式呼叫 -->
   <div class="seg" id="toolseg">
     <button id="brush" class="on">筆刷</button><button id="eraser" title="橡皮擦工具 (E)；點擊秒數標籤可調整倒數時間">橡皮擦<span id="eraser-delay-badge" class="eraser-delay-badge" title="點擊調整切換秒數 (1s/2s/3s/5s/關閉)">2s</span></button><button id="tfm">變形</button><button id="pick">滴管</button><button id="mtog" title="磁力描邊：沿著輪廓拖曳，線會吸附到邊緣 (M)">描邊</button><button id="bkt" title="油漆桶：點一下填滿封閉區域 (G)">填色</button>
   </div>
@@ -581,6 +572,6 @@
     </div>
   </div>
 </div>
-<script src="app.js?v=opt17"></script>
+<script src="app.js?v=opt20"></script>
 </body>
 </html>
