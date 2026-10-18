@@ -312,7 +312,7 @@ if (mobMore) {
 if (topmore && mobMore) {
   const jump = {
     'tm-newdoc': 'btn-new-doc', 'tm-popen': 'popen', 'tm-psave': 'psave', 'tm-save': 'save',
-    'tm-imp': 'imp', 'tm-btog': 'btog', 'tm-vori': 'vori', 'tm-d3': 'd3',
+    'tm-imp': 'imp', 'tm-btog': 'btog', 'tm-d3': 'd3',
     'tm-vfit': 'vfit', 'tm-v100': 'tab-v100', 'tm-zout': 'zout', 'tm-zin': 'zin',
   };
   topmore.addEventListener('click', e => {
@@ -321,13 +321,6 @@ if (topmore && mobMore) {
     closeTopMore();
     if (target) $(target)?.click();
   });
-  // 「存專案時附上原始圖檔」跟原本的 #praw 是同一件事，兩邊互相同步
-  const praw = $('tm-praw');
-  if (praw && $('praw')) {
-    praw.checked = $('praw').checked;
-    praw.onchange = () => { $('praw').checked = praw.checked; };
-    $('praw').addEventListener('change', () => { praw.checked = $('praw').checked; });
-  }
   addEventListener('pointerdown', e => {
     if (!topmore || topmore.style.display !== 'block') return;
     if (!topmore.contains(e.target) && !mobMore.contains(e.target)) closeTopMore();
@@ -911,6 +904,50 @@ function initBrushSelector() {
 }
 initBrushSelector();
 
+// 上方工具列的「筆刷」組：筆刷種類＋鉛筆硬度（右側面板的鏡像，兩邊互相同步）
+function syncTopBrush() {
+  const tb = $('tbrush'), th = $('thard'), sel = $('bsel');
+  if (tb && sel && sel.value) tb.value = sel.value;
+  if (th) {
+    th.value = curHardness;
+    th.style.display = (B && B.id === 'pencil') ? '' : 'none'; // 硬度只有鉛筆有意義
+  }
+}
+function initTopBrush() {
+  const tb = $('tbrush');
+  if (tb) {
+    tb.innerHTML = '';
+    BRUSH_CATEGORIES.forEach(cat => {
+      const grp = document.createElement('optgroup');
+      grp.label = cat.group;
+      cat.items.forEach(k => grp.appendChild(new Option(k, k)));
+      tb.appendChild(grp);
+    });
+  }
+  const th = $('thard');
+  if (th) {
+    th.innerHTML = '';
+    ['9H', '6H', '4H', '2H', 'H', 'F', 'HB', 'B', '2B', '3B', '4B', '6B', '8B', '9B']
+      .forEach(h => th.appendChild(new Option(h, h)));
+  }
+  syncTopBrush();
+}
+if ($('tbrush')) {
+  $('tbrush').onchange = e => {
+    const sel = $('bsel');
+    if (!sel) return;
+    sel.value = e.target.value;
+    sel.dispatchEvent(new Event('change')); // 走原本的筆刷切換流程
+  };
+}
+if ($('thard')) {
+  $('thard').onchange = e => {
+    const bar = $('hardness-bar');
+    const btn = bar && [...bar.querySelectorAll('.hardness-btn')].find(b => b.textContent === e.target.value);
+    if (btn) btn.click(); else { curHardness = e.target.value; syncTopBrush(); }
+  };
+}
+
 $('bsel').onchange = e => {
   ensureBrushMode();
   B = BRUSHES[e.target.value] || BRUSHES['鉛筆'];
@@ -1094,6 +1131,7 @@ function renderHardnessBar() {
         B.flow = info.flow;
         B.po = info.po;
       }
+      syncTopBrush();
     };
     bar.append(btn);
   });
@@ -1251,6 +1289,8 @@ function updateBrushSubpanels() {
       }
     }
   }
+
+  syncTopBrush(); // 上方筆刷組跟著面板走
 }
 
 if ($('studio-hard')) {
@@ -3568,7 +3608,7 @@ $('vsize').onchange = e => {
 $('vori').onclick = () => resizeDoc(H, W);
 
 addLayer(true); addLayer(); sizeUi(); resizeMinimap();
-renderHardnessBar(); renderNibBar(); renderWcTypesBar(); updateBrushSubpanels();
+renderHardnessBar(); renderNibBar(); renderWcTypesBar(); initTopBrush(); updateBrushSubpanels();
 
 // --- iPad 側邊 Procreate 風格快速滑桿與長按臨時橡皮擦 ---
 let quickBarOn = true;

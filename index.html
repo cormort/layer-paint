@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Paint</title>
-  <link rel="stylesheet" href="style.css?v=opt20">
+  <link rel="stylesheet" href="style.css?v=opt22">
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
@@ -32,27 +32,30 @@
 <div id="loupe" class="loupe"><canvas id="loupe-cv"></canvas></div>
 <div id="tool-toast" class="tool-toast" role="status" aria-live="polite"><span id="tt-swatch" class="tt-swatch"></span><span id="tt-text"></span></div>
 <header id="topbar">
-  <!-- 復原／重做固定在最左邊，任何寬度都先看得到 -->
+  <!-- 上方工具列＝「復原／重做 → 筆刷 → 常用功能」。左側工具箱已經有的（各工具、大小／不透明度、縮放）
+       一律不在這裡重複。 -->
   <button id="undo" class="icon" title="復原（兩指輕點）" aria-label="復原">↶</button><button id="redo" class="icon" title="重做（三指輕點）" aria-label="重做">↷</button>
   <span class="sep"></span>
-  <!-- 工具都在左側工具箱（V/B/E/I/M/G），上方不再放工具列；#toolseg 只留給程式呼叫 -->
+  <!-- 筆刷：種類＋鉛筆硬度（右側面板的鏡像，換哪邊都會同步） -->
+  <select id="tbrush" class="tb-brush" aria-label="筆刷種類" title="筆刷種類"></select>
+  <select id="thard" class="tb-hard" aria-label="鉛筆硬度" title="鉛筆硬度（選鉛筆時才出現）"></select>
+  <!-- 工具都在左側工具箱（V/B/E/I/M/G）；#toolseg 只留給程式呼叫 -->
   <div class="seg" id="toolseg">
     <button id="brush" class="on">筆刷</button><button id="eraser" title="橡皮擦工具 (E)；點擊秒數標籤可調整倒數時間">橡皮擦<span id="eraser-delay-badge" class="eraser-delay-badge" title="點擊調整切換秒數 (1s/2s/3s/5s/關閉)">2s</span></button><button id="tfm">變形</button><button id="pick">滴管</button><button id="mtog" title="磁力描邊：沿著輪廓拖曳，線會吸附到邊緣 (M)">描邊</button><button id="bkt" title="油漆桶：點一下填滿封閉區域 (G)">填色</button>
   </div>
-  <button id="btn-new-doc" class="btn-new-doc" title="新增畫布／紙張尺寸選擇 (⌘N)">📄 新畫布</button>
-  <button id="popen" title="開啟先前存的 .lpaint 專案">開專案</button>
-  <button id="psave" title="存成可再編輯的專案檔（保留圖層）">存專案</button>
-  <label class="check" title="勾選：專案會附上匯入時的原始圖檔，之後可以無損地重複變形底圖，檔案較大">
-    <input id="praw" type="checkbox" checked> 含原圖</label>
-  <button id="save">匯出 PNG</button>
+  <span class="sep"></span>
+  <!-- 常用：匯入參考圖、底圖開關、存／匯出、新畫布、開專案、版型 -->
   <button id="imp" title="匯入圖片當底圖（放在最底層之上）">匯入底圖</button>
   <button id="btog" class="btn-basetog" title="顯示／隱藏底圖（參考圖）；沒有底圖時點擊＝匯入">👁️ 底圖</button>
   <input id="pfile" type="file" hidden>
   <input id="impf" type="file" accept="image/*" hidden>
+  <button id="psave" title="存成可再編輯的專案檔（保留圖層）">存專案</button>
+  <button id="save">匯出 PNG</button>
+  <button id="btn-new-doc" class="btn-new-doc" title="新增畫布／紙張尺寸選擇 (⌘N)">📄 新畫布</button>
+  <button id="popen" title="開啟先前存的 .lpaint 專案">開專案</button>
   <span class="sep"></span>
   <button id="btn-paper-select" class="btn-paper-select" title="紙張尺寸與版面規格 (⌘N)">📐 <span id="vsize-label">1200×1600</span> ▾</button>
   <select id="vsize" aria-label="版面尺寸" style="display:none"></select>
-  <button id="vori" title="切換直式／橫式">直式</button>
   <span class="spacer"></span>
   <span class="sep"></span>
   <div class="seg" id="viewseg">
@@ -67,7 +70,7 @@
   <button id="d3">3D 檢視</button>
   <span class="spacer"></span>
   <button id="uitog" aria-label="收合面板"></button>
-  <!-- 手機：把檔案／版面／視角這些次要操作收進「⋯」 -->
+  <!-- 窄螢幕：把檔案／版面／視角這些次要操作收進「⋯」 -->
   <button id="mobbar-more" class="mobbar-more" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="topmore" title="更多功能">⋯</button>
 </header>
 <div id="topmore" class="topmore" role="menu" aria-label="更多功能" style="display:none">
@@ -78,14 +81,15 @@
     <button id="tm-save" type="button">🖼️ 匯出 PNG</button>
     <button id="tm-imp" type="button">🖼️ 匯入底圖</button>
     <button id="tm-btog" type="button">👁️ 底圖顯示</button>
-    <button id="tm-vori" type="button">▯ 直式／橫式</button>
+    <button id="vori" type="button" title="切換直式／橫式">直式</button>
     <button id="tm-d3" type="button">🧊 3D 檢視</button>
     <button id="tm-vfit" type="button">整體視角</button>
     <button id="tm-v100" type="button">100% 原寸</button>
     <button id="tm-zout" type="button">🔍 縮小</button>
     <button id="tm-zin" type="button">🔍 放大</button>
   </div>
-  <label class="tm-check"><input id="tm-praw" type="checkbox" checked> 存專案時附上原始圖檔</label>
+  <label class="tm-check" title="勾選：專案會附上匯入時的原始圖檔，之後可以無損地重複變形底圖，檔案較大">
+    <input id="praw" type="checkbox" checked> 存專案時附上原始圖檔</label>
 </div>
 
 <div id="eraser-toast" class="eraser-toast" style="display:none">
@@ -572,6 +576,6 @@
     </div>
   </div>
 </div>
-<script src="app.js?v=opt20"></script>
+<script src="app.js?v=opt22"></script>
 </body>
 </html>

@@ -92,6 +92,9 @@ body {
 #topbar label { white-space: nowrap; }
 #topbar select { flex: none; }
 #toolseg { display: none; } /* 工具都在左側工具箱，這裡的按鈕只剩程式呼叫用 */
+/* 上方工具列的筆刷組：種類＋鉛筆硬度（右側面板的鏡像） */
+#topbar #tbrush { width: 118px; min-height: 34px; padding: 0 24px 0 9px; font-size: 13px; }
+#topbar #thard { width: 68px; min-height: 34px; padding: 0 22px 0 8px; font-size: 13px; }
 #topbar #viewseg { width: 116px; }
 #topbar #uitog { min-width: 84px; }
 #topbar #vori { min-width: 64px; }
@@ -104,16 +107,16 @@ body {
   font-size: 18px;
   line-height: 1;
 }
-/* 上方工具列依視窗寬度自動收成三段（工具都在左側工具箱，上方只放檔案／版面／視角）：
-   1) 寬 ≤1409：先收掉「整體／局部」與縮放（文件標籤列與右側導航器都有同一組功能）
-   2) 寬 ≤1119：檔案／版面／視角收進「⋯」，只留復原／重做＋面板開合
-   3) 寬 ≥1410：完整工具列 */
-@media (max-width: 1409px) {
+/* 上方工具列依視窗寬度自動收成三段（左側已有的不重複，上方只放復原／重做、筆刷、常用功能）：
+   1) 寬 ≤1499：先收掉「整體／局部」與縮放（文件標籤列與右側導航器都有同一組功能）
+   2) 寬 ≤1189：檔案／版面／視角收進「⋯」，只留復原／重做＋筆刷＋面板開合
+   3) 寬 ≥1500：完整工具列 */
+@media (max-width: 1499px) {
   #topbar #viewseg,
   #topbar .zoombox,
   #topbar .sep-3d { display: none; } /* 中間那兩組收掉後，兩個分隔線會黏在一起 */
 }
-@media (max-width: 1119px) {
+@media (max-width: 1189px) {
   #topbar #btn-new-doc,
   #topbar #popen,
   #topbar #psave,
@@ -2060,6 +2063,8 @@ input[type=color]::-moz-color-swatch { border: 0; border-radius: 50%; }
   #topbar .spacer,
   #topbar > .sep { display: none; }
   #topbar .icon { flex: 0 0 34px !important; }
+  #topbar #tbrush { width: 96px; min-height: 30px; font-size: 12px; padding: 0 22px 0 7px; }
+  #topbar #thard { width: 58px; min-height: 30px; font-size: 12px; padding: 0 20px 0 6px; }
   #mobbar-more {
     display: inline-flex;
     align-items: center;
