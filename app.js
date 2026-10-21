@@ -1,4 +1,3 @@
-console.log("APP_JS_LOADED");
 // 畫布尺寸是可變的：專案檔帶著自己的尺寸，載入時會一起換掉
 let W = 1200, H = 1600;
 // 圖層縮圖：跟著畫布比例走，否則非 3:4 的畫布會被壓扁
@@ -416,6 +415,9 @@ const dropImg = L => {
 const forget = L => { thumbs.delete(L); dropImg(L); };
 // 底圖＝匯入的參考圖層（有 base 旗標或還留著原始圖檔的圖層）；一疊底圖取最上面那張
 const baseLayer = () => { for (let i = layers.length - 1; i >= 0; i--) if (layers[i].base) return layers[i]; return null; };
+// 圖層混合模式 → canvas 合成模式。'normal' 不是合法的 globalCompositeOperation：設下去會被忽略，
+// 沿用上一層的 multiply 之類，匯出／縮圖／滴管就會跟畫面不一樣
+const gco = l => l.blend && l.blend !== 'normal' ? l.blend : 'source-over';
 function list(...dirty) {
   const d = new Set(dirty);
   const listEl = $('list'), keepScroll = listEl ? listEl.scrollTop : 0; // 重建列之後把捲動位置放回去
@@ -1664,7 +1666,7 @@ function drawPred(ev) {
   const curFlow = B.id === 'pencil' ? (PENCIL_HARDNESS[curHardness]?.flow || B.flow)
                 : (B.id === 'wc' || B.wet) ? ((WC_BRUSHES[curWcType]?.flow || B.flow) * (1.3 - 0.5 * wcWetness))
                 : B.flow;
-  const fl = curFlow * (ev.pointerType === 'pen' && B.po ? 1 - B.po + B.po * ev.pressure : 1) * (1 - .6 * t);
+  const fl = curFlow * (ev.pointerType === 'pen' && B.po ? 1 - B.po + B.po * penPressure(ev) : 1) * (1 - .6 * t); // 跟 draw() 用同一條壓感曲線
   const col = $('color').value;
   let from = last, k = step; // 從一個步距之後才落印，免得和真實筆跡在筆尖疊成兩倍濃度
   for (const pe of q) {
@@ -1676,6 +1678,9 @@ function drawPred(ev) {
 }
 
 let sid = null, pen = false, pan = null, space = false;
+// 防手掌誤觸的設定快取起來：pointermove 是熱路徑，不該每個事件都讀一次 localStorage
+let palmRejectOn = true;
+try { palmRejectOn = localStorage.getItem('palm_reject') !== '0'; } catch {}
 const touches = new Map();
 const midOf = m => { const p = [...m.values()]; return [(p[0][0] + p[1][0]) / 2, (p[0][1] + p[1][1]) / 2, Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]), Math.atan2(p[1][1] - p[0][1], p[1][0] - p[0][0])]; };
 const mid = () => midOf(touches);
@@ -1709,8 +1714,7 @@ stage.onpointerdown = e => {
     const h = gHandles().find(p => { const [hx, hy] = toStage(p.x, p.y); return Math.hypot(hx - px, hy - py) < R; });
     if (h) { gdrag = { id: h.id, pid: e.pointerId }; return; }
   }
-  let palmReject = true; // Apple Pencil 專用防誤觸
-  try { palmReject = localStorage.getItem('palm_reject') !== '0'; } catch {}
+  const palmReject = palmRejectOn; // Apple Pencil 專用防誤觸
 
   // 想畫在被鎖定的圖層（含預設鎖定的底圖）時說清楚原因，不要只是「按了沒反應」
   if (cur.locked && e.pointerType !== 'touch' && !space) showToast(cur.base ? '底圖已鎖定：先在圖層列點 🔒 解鎖，才能畫在上面' : '「' + cur.name + '」已鎖定：先解鎖才能畫');
@@ -1777,8 +1781,7 @@ stage.onpointermove = e => {
   }
   if (tap?.start.has(e.pointerId)) { const p0 = tap.start.get(e.pointerId); if (Math.hypot(e.clientX - p0[0], e.clientY - p0[1]) > 10) tap.moved = true; }
   if (touches.has(e.pointerId)) {
-    let palmReject = true;
-    try { palmReject = localStorage.getItem('palm_reject') !== '0'; } catch {}
+    const palmReject = palmRejectOn;
     const old = touches.size === 2 ? mid() : null, prev = touches.get(e.pointerId);
     touches.set(e.pointerId, [e.clientX, e.clientY]);
     if (old) {
@@ -2050,7 +2053,7 @@ function updateMinimapThumb() {
   layers.forEach(l => {
     if (l.visible) {
       ctx.globalAlpha = +(l.c.style.opacity || 1);
-      ctx.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+      ctx.globalCompositeOperation = gco(l);
       ctx.drawImage(l.c, 0, 0, mmW, mmH);
     }
   });
@@ -2255,7 +2258,7 @@ $('merge').onclick = () => {
   const i = layers.indexOf(cur); if (i < 1) return;
   const b = layers[i - 1];
   if (cur.locked || b.locked) return showToast('鎖定中的圖層不參與合併，先解鎖再試'); // 鎖定中的圖層不動
-  if (cur.visible) { b.ctx.globalAlpha = cur.c.style.opacity || 1; b.ctx.drawImage(cur.c, 0, 0); b.ctx.globalAlpha = 1; }
+  if (cur.visible) { b.ctx.globalAlpha = cur.c.style.opacity || 1; b.ctx.globalCompositeOperation = gco(cur); b.ctx.drawImage(cur.c, 0, 0); b.ctx.globalAlpha = 1; b.ctx.globalCompositeOperation = 'source-over'; }
   const dead = cur; dead.c.remove(); layers.splice(i, 1); cur = b; forget(dead); dropImg(b);
   purge(dead); purge(b); sync(b);
 };
@@ -2348,7 +2351,7 @@ function pickColor([cx, cy]) {
   // 疊法跟匯出 PNG 一致：圖層順序 + 混合模式 + 不透明度
   layers.filter(l => l.visible).forEach(l => {
     pickCtx.globalAlpha = +(l.c.style.opacity || 1);
-    pickCtx.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    pickCtx.globalCompositeOperation = gco(l);
     pickCtx.drawImage(l.c, x - r, y - r, n, n, 0, 0, n, n);
   });
   pickCtx.globalAlpha = 1; pickCtx.globalCompositeOperation = 'source-over';
@@ -2393,7 +2396,7 @@ function buildEdgeMap() {
   g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
   layers.filter(l => l.visible).forEach(l => {
     g.globalAlpha = +(l.c.style.opacity || 1);
-    g.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    g.globalCompositeOperation = gco(l);
     g.drawImage(l.c, 0, 0, w, h);
   });
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
@@ -2500,7 +2503,7 @@ function drawLoupe(clientX, clientY, cx, cy) {
   const src = Math.min(LOUPE / 5, 64 / Math.max(.05, v.s));
   layers.filter(l => l.visible).forEach(l => {
     g.globalAlpha = +(l.c.style.opacity || 1);
-    g.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    g.globalCompositeOperation = gco(l);
     g.drawImage(l.c, cx - src / 2, cy - src / 2, src, src, 0, 0, LOUPE, LOUPE);
   });
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
@@ -2642,7 +2645,7 @@ function bucketSource() {
   const src = $('bsample')?.value === 'all' ? layers.filter(l => l.visible) : [cur];
   src.forEach(l => {
     g.globalAlpha = +(l.c.style.opacity || 1);
-    g.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    g.globalCompositeOperation = gco(l);
     g.drawImage(l.c, 0, 0);
   });
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
@@ -3096,7 +3099,7 @@ function bgIsBlank() {
   const bg = layers.find(l => l.bg);
   if (!bg || bg.base) return false; // 已經是圖片底圖就不再問
   let d;
-  try { d = bg.ctx.getImageData(0, 0, W, H).data; } catch { return false; }
+  try { d = readPx(bg.c); } catch { return false; } // 別直接讀圖層 canvas，見 readPx 的說明
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] < 8) continue;                                    // 透明＝空的
     if (d[i] < 250 || d[i + 1] < 250 || d[i + 2] < 250) return false; // 有任何非白都有東西
@@ -3176,7 +3179,7 @@ $('save').onclick = () => {
   const o = Object.assign(document.createElement('canvas'), { width: W, height: H }), x = o.getContext('2d');
   layers.filter(l => l.visible).forEach(l => {
     x.globalAlpha = l.c.style.opacity || 1;
-    x.globalCompositeOperation = l.blend || l.c.style.mixBlendMode || 'source-over';
+    x.globalCompositeOperation = gco(l);
     x.drawImage(l.c, 0, 0);
   });
   x.globalCompositeOperation = 'source-over';
@@ -3202,7 +3205,7 @@ async function saveProject() {
   const meta = {
     w: W, h: H, cur: layers.indexOf(cur), guide: { ...guide },
     layers: layers.map(l => ({
-      name: l.name, visible: !!l.visible, locked: !!l.locked, opacity: +(l.c.style.opacity || 1), guide: !!l.guide, bg: !!l.bg, base: !!l.base,
+      name: l.name, visible: !!l.visible, locked: !!l.locked, opacity: +(l.c.style.opacity || 1), blend: gco(l) === 'source-over' ? null : l.blend, guide: !!l.guide, bg: !!l.bg, base: !!l.base,
       bgpaint: l.bgpaint || null, // 合併到背景的圖層：再變形時要維持「白紙＋半透明圖片」的畫法
       raw: withRaw && l.raw ? (l.raw.type || 'image/png') : null,
       tf: l.tf ? { ...l.tf } : null, // 底圖目前的變形，還原後才能接著微調
@@ -3250,8 +3253,9 @@ async function openProject(file) {
     const bm = await createImageBitmap(parts[i]).catch(() => null);
     if (bm) { ctx.drawImage(bm, 0, 0); bm.close(); }
     c.style.opacity = m.opacity != null && m.opacity < 1 ? m.opacity : '';
+    if (m.blend) c.style.mixBlendMode = m.blend;
     // 有帶著原始檔就還原成可無損再變形的底圖（.tf 沿用預設，之後再變形會重新算）
-    const L = { c, ctx, name: m.name || ('圖層 ' + (i + 1)), visible: m.visible !== false, locked: !!m.locked, guide: !!m.guide, raw: raws[i], tf: m.tf || undefined,
+    const L = { c, ctx, name: m.name || ('圖層 ' + (i + 1)), visible: m.visible !== false, locked: !!m.locked, guide: !!m.guide, raw: raws[i], tf: m.tf || undefined, blend: m.blend || undefined,
       bg: !!m.bg || (i === 0 && m.name === '背景'), // 舊專案沒有 bg 旗標，用名稱推斷
       bgpaint: m.bgpaint || undefined,
       base: m.base != null ? !!m.base : !!raws[i] }; // 舊專案沒有 base 旗標：帶原圖的圖層就當底圖
@@ -3369,8 +3373,9 @@ function createNewDoc(w, h, bgWhite = true) {
 async function openImageAsNewDoc(file) {
   const img = await createImageBitmap(file).catch(() => null);
   if (!img) return alert('無法讀取這張圖片');
-  const w = Math.min(4096, Math.max(64, img.width));
-  const h = Math.min(4096, Math.max(64, img.height));
+  // 等比縮到 4096 以內；兩邊各自夾住的話，5000×3000 的照片會被壓扁成 4096×3000
+  const k = Math.min(1, 4096 / Math.max(img.width, img.height));
+  const w = Math.max(64, Math.round(img.width * k)), h = Math.max(64, Math.round(img.height * k));
   stop3d?.(); endTf?.();
   layers.forEach(l => { l.c.remove(); dropImg(l); });
   thumbs.clear();
@@ -3752,10 +3757,9 @@ function initIpadQuickBar() {
 
 function initIpadSettings() {
   if ($('palm-reject')) {
-    let palm = true;
-    try { palm = localStorage.getItem('palm_reject') !== '0'; } catch {}
-    $('palm-reject').checked = palm;
+    $('palm-reject').checked = palmRejectOn;
     $('palm-reject').onchange = e => {
+      palmRejectOn = e.target.checked;
       try { localStorage.setItem('palm_reject', e.target.checked ? '1' : '0'); } catch {}
     };
   }
